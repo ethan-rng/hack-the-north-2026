@@ -13,6 +13,9 @@ export interface PlaceLayout {
   w: number;
   h: number;
   color: number;
+  strokeColor: number;
+  labelColor: number;
+  icon: string;
 }
 
 export const CANVAS_W = 720;
@@ -23,24 +26,28 @@ export const SEGMENT_COLORS: Record<string, number> = {
   students: 0x2563eb,
   office_workers: 0x059669,
   locals: 0xd97706,
-  families: 0xdb2777,
-  tourists: 0x7c3aed,
   regulars: 0x0891b2,
-  unknown: 0x64748b,
+  walk_ins: 0x7c3aed,
+  premium_seekers: 0xdb2777,
+  night_crowd: 0x9333ea,
+  families: 0xdc2626,
+  occasional: 0x0284c7,
+  new_visitors: 0xea580c,
+  unknown: 0x71717a,
 };
 
 export function colorForSegment(id: string): number {
   return SEGMENT_COLORS[id] ?? SEGMENT_COLORS.unknown;
 }
 
-const KIND_COLORS: Record<string, number> = {
-  residential: 0xe0e7ff,
-  school: 0xfef3c7,
-  office: 0xd1fae5,
-  gym: 0xffedd5,
-  transit: 0xe5e7eb,
-  our_business: 0xdbeafe,
-  competitor: 0xfee2e2,
+const KIND_STYLE: Record<string, { fill: number; stroke: number; label: number; icon: string }> = {
+  residential: { fill: 0xeef2ff, stroke: 0xa5b4fc, label: 0x3730a3, icon: "◉" },
+  school: { fill: 0xfef3c7, stroke: 0xfcd34d, label: 0x92400e, icon: "▲" },
+  office: { fill: 0xd1fae5, stroke: 0x6ee7b7, label: 0x065f46, icon: "◼" },
+  gym: { fill: 0xffedd5, stroke: 0xfdba74, label: 0x9a3412, icon: "◆" },
+  transit: { fill: 0xe5e7eb, stroke: 0x9ca3af, label: 0x374151, icon: "◎" },
+  our_business: { fill: 0xdbeafe, stroke: 0x60a5fa, label: 0x1e40af, icon: "★" },
+  competitor: { fill: 0xfee2e2, stroke: 0xfca5a5, label: 0x991b1b, icon: "×" },
 };
 
 // Deterministic grid layout so baseline and what-if line up.
@@ -53,22 +60,24 @@ export function layoutPlaces(spec: SimSpec): PlaceLayout[] {
     const row = Math.floor(i / cols);
     const cx = col * cellW + cellW / 2;
     const cy = row * cellH + cellH / 2;
+    const style = KIND_STYLE[p.kind] ?? KIND_STYLE.residential;
     return {
       id: p.id,
       kind: p.kind,
       label: labelFor(p.id),
       center: { x: cx, y: cy },
-      w: cellW - 40,
-      h: cellH - 40,
-      color: KIND_COLORS[p.kind] ?? 0xe5e7eb,
+      w: cellW - 28,
+      h: cellH - 28,
+      color: style.fill,
+      strokeColor: style.stroke,
+      labelColor: style.label,
+      icon: style.icon,
     };
   });
 }
 
 function labelFor(id: string): string {
-  return id
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export interface AgentSnapshot {
@@ -80,10 +89,8 @@ export interface AgentSnapshot {
 }
 
 // Walk events once and produce, for every tick, the position of every agent.
-// Ticks with no change reuse the previous snapshot lazily via getAt().
 export interface Trajectory {
   segmentId: string;
-  // Sorted by tick asc.
   frames: { tick: number; placeId: string | null; state: "home" | "at_place" | "in_queue" | "left" }[];
 }
 
@@ -146,10 +153,9 @@ export function snapshotAt(
 }
 
 function jitterAround(place: PlaceLayout, seed: number): Point {
-  // Deterministic scatter within the place rectangle.
   const a = (Math.sin(seed * 12.9898) * 43758.5453) % 1;
   const b = (Math.sin(seed * 78.233) * 43758.5453) % 1;
-  const dx = (a - Math.floor(a) - 0.5) * (place.w - 16);
-  const dy = (b - Math.floor(b) - 0.5) * (place.h - 16);
+  const dx = (a - Math.floor(a) - 0.5) * (place.w - 24);
+  const dy = (b - Math.floor(b) - 0.5) * (place.h - 24);
   return { x: place.center.x + dx, y: place.center.y + dy };
 }

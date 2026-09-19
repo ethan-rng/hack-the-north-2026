@@ -8,6 +8,16 @@ import type { SimSpec } from "@/sim/schema";
 import { report, fallbackReport } from "@/llm/report";
 import { persistRun } from "@/lib/runPersistence";
 
+function hintFromError(msg: string): string | undefined {
+  if (/Insufficient AI Gateway credits/i.test(msg))
+    return "Your Cloudflare Workers AI account is out of credits for typesafe/jev. Add billing on the CF dashboard, or set USE_MOCK_JEV=true in .env.local to continue with the mock.";
+  if (/ANTHROPIC_API_KEY/i.test(msg))
+    return "Set ANTHROPIC_API_KEY in .env.local.";
+  if (/worker jev 502/i.test(msg))
+    return "The Cloudflare Worker returned an error. Check `npm run worker:tail` for details.";
+  return undefined;
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -18,26 +28,41 @@ export async function POST(req: Request) {
   } catch {
     body = null;
   }
-  const b = (body ?? {}) as { spec?: SimSpec; preset?: string };
+  const b = (body ?? {}) as { spec?: SimSpec; preset?: string; seed?: number; generateSummary?: boolean };
   const specInput: SimSpec | undefined = b.spec ?? getPreset(b.preset ?? "cafe");
   if (!specInput) return NextResponse.json({ error: `unknown preset '${b.preset}'` }, { status: 400 });
   const validation = validateSimSpec(specInput);
   if (!validation.ok) {
     return NextResponse.json({ error: "invalid spec", issues: validation.issues }, { status: 400 });
   }
-  const seed = (body as { seed?: number } | null)?.seed ?? specInput.seed ?? 42;
+  const seed = b.seed ?? specInput.seed ?? 42;
+  const generateSummary = b.generateSummary !== false;
   const runId = newRunId();
   const jev = getJevClient();
-  const result = await runSpec(validation.value, { seed, jev, runId });
+  let result;
   try {
-    const r = await report({ spec: result.spec, baseline: result.baseline.metrics, whatIf: result.what_if.metrics });
-    result.summary = r.summary;
-  } catch {
-    result.summary = fallbackReport({
-      spec: result.spec,
-      baseline: result.baseline.metrics,
-      whatIf: result.what_if.metrics,
-    }).summary;
+    result = await runSpec(validation.value, { seed, jev, runId });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "sim run failed",
+        detail: (e as Error).message,
+        hint: hintFromError((e as Error).message),
+      },
+      { status: 502 },
+    );
+  }
+  if (generateSummary) {
+    try {
+      const r = await report({ spec: result.spec, baseline: result.baseline.metrics, whatIf: result.what_if.metrics });
+      result.summary = r.summary;
+    } catch {
+      result.summary = fallbackReport({
+        spec: result.spec,
+        baseline: result.baseline.metrics,
+        whatIf: result.what_if.metrics,
+      }).summary;
+    }
   }
   saveRun(result);
   // Fire-and-forget persistence so the report survives dev restarts and can be

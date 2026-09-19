@@ -81,7 +81,21 @@ export async function POST(req: Request) {
   const t2 = Date.now();
   const runId = newRunId();
   const jev = getJevClient();
-  const result = await runSpec(planResult.spec, { seed, jev, runId });
+  let result;
+  try {
+    result = await runSpec(planResult.spec, { seed, jev, runId });
+  } catch (e) {
+    const msg = (e as Error).message;
+    const hint = /Insufficient AI Gateway credits/i.test(msg)
+      ? "Cloudflare Workers AI is out of credits for typesafe/jev. Add billing on the CF dashboard, or set USE_MOCK_JEV=true in .env.local."
+      : /worker jev/i.test(msg)
+        ? "The Cloudflare Worker returned an error. Check `npm run worker:tail` for details."
+        : undefined;
+    return NextResponse.json(
+      { error: "sim run failed", detail: msg, hint, timings },
+      { status: 502 },
+    );
+  }
   timings.run_ms = Date.now() - t2;
 
   // 4. Report.

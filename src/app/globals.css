@@ -1,26 +1,152 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* Warm off-white app background — closer to Notion/Linear than pure gray-50 */
+  --color-app-bg: #f8f6f2;
+  --color-app-panel: #ffffff;
+  --color-app-border: #e6e4dd;
+  --color-app-border-strong: #d6d3c9;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-ink: #18181b;
+  --color-ink-muted: #52525b;
+  --color-ink-subtle: #71717a;
+
+  --color-accent: #0f172a;
+  --color-accent-hover: #1e293b;
+  --color-positive: #047857;
+  --color-positive-soft: #ecfdf5;
+  --color-negative: #b91c1c;
+  --color-negative-soft: #fef2f2;
+  --color-warning: #b45309;
+  --color-warning-soft: #fffbeb;
+  --color-info: #1d4ed8;
+  --color-info-soft: #eff6ff;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Elevation scale — very subtle depth, no drama */
+  --shadow-flat: 0 1px 0 rgba(24, 24, 27, 0.03);
+  --shadow-card: 0 1px 2px rgba(24, 24, 27, 0.04), 0 0 0 1px rgba(24, 24, 27, 0.04);
+  --shadow-pop: 0 8px 24px -8px rgba(24, 24, 27, 0.12), 0 2px 4px rgba(24, 24, 27, 0.04);
+
+  --radius-card: 12px;
+  --radius-pill: 999px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    background: var(--color-app-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: transparent;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 20%, transparent);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-subtle);
+  }
+  .card {
+    background: var(--color-app-panel);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--color-app-border);
+    box-shadow: var(--shadow-flat);
+  }
+  .card-strong {
+    background: var(--color-app-panel);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-accent);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background 120ms ease;
+  }
+  .btn-primary:hover {
+    background: var(--color-accent-hover);
+  }
+  .btn-primary:disabled {
+    background: color-mix(in srgb, var(--color-accent) 40%, white);
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-app-panel);
+    color: var(--color-ink);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid var(--color-app-border-strong);
+    transition: border-color 120ms ease, background 120ms ease;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-ink) 40%, white);
+    background: color-mix(in srgb, var(--color-app-bg) 60%, white);
+  }
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .input {
+    background: var(--color-app-panel);
+    border: 1px solid var(--color-app-border-strong);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-ink);
+    outline: none;
+    width: 100%;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
+}
+
+/* Very subtle top progress bar — used during ask() pipeline */
+@keyframes progress-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  overflow: hidden;
+  z-index: 50;
+}
+.progress-bar::before {
+  content: "";
+  display: block;
+  width: 25%;
+  height: 100%;
+  background: var(--color-accent);
+  animation: progress-indeterminate 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
