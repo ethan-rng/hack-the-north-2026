@@ -1,179 +1,1241 @@
 "use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { QuestionChips } from "@/components/QuestionChips";
-
-type Status =
-  | { kind: "idle" }
-  | { kind: "running"; label: string }
-  | { kind: "clarify"; message: string }
-  | { kind: "error"; message: string };
-
-export default function Home() {
-  const router = useRouter();
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
-  const [preset, setPreset] = useState<"cafe" | "barbershop" | "tacoshop">("cafe");
-
-  const [question, setQuestion] = useState("Should I raise my latte from $5.00 to $5.50?");
-  const [businessType, setBusinessType] = useState("cafe");
-  const [businessDescription, setBusinessDescription] = useState(
-    "Small café near a university, 8 menu items, 2 baristas, open 7 to 5. Regulars are mostly students and office workers.",
-  );
-  const [location, setLocation] = useState("N1H postal area, Guelph, ON");
-
-  async function runPreset() {
-    setStatus({ kind: "running", label: `Running ${preset} preset…` });
-    try {
-      const res = await fetch("/api/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ preset }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
-      const { runId } = await res.json();
-      router.push(`/report/${runId}`);
-    } catch (e) {
-      setStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) });
-    }
-  }
-
-  async function ask() {
-    setStatus({ kind: "running", label: "Researching neighbourhood…" });
-    try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, businessType, businessDescription, location }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      if (body.clarify) {
-        setStatus({ kind: "clarify", message: body.clarify });
-        return;
-      }
-      router.push(`/report/${body.runId}`);
-    } catch (e) {
-      setStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) });
-    }
-  }
-
-  const busy = status.kind === "running";
-
+import dynamic from "next/dynamic";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  CircleDot,
+  Compass,
+  ExternalLink,
+  Globe2,
+  Layers3,
+  LoaderCircle,
+  MapPin,
+  RotateCcw,
+  Sparkles,
+  Users,
+  X,
+} from "lucide-react";
+import type {
+  Environment,
+  Event,
+  Metrics,
+  Person,
+  Place,
+  Result,
+  Run,
+  SessionSnapshot,
+} from "@/core/types";
+import {
+  comparable,
+  difference,
+  effectivePrice,
+  occupancy,
+  placeOpen,
+  resultFor,
+  serviceSettings,
+} from "@/core/engine";
+import { compileEnvironment, fallbackConfiguration } from "@/core/generation";
+const World = dynamic(() => import("@/ui/World"), {
+  ssr: false,
+  loading: () => (
+    <div className="world-loading">
+      <LoaderCircle className="spin" /> Preparing the scene
+    </div>
+  ),
+});
+const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const time = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+async function api(path: string, data?: unknown) {
+  const response = await fetch(`/api/${path}`, {
+    method: data === undefined ? "GET" : "POST",
+    headers: data === undefined ? {} : { "Content-Type": "application/json" },
+    body: data === undefined ? undefined : JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Request failed");
+  return result;
+}
+function Brand() {
   return (
-    <main className="mx-auto flex min-h-full max-w-3xl flex-col items-start px-6 py-16">
-      <h1 className="text-4xl font-semibold tracking-tight text-zinc-900">What If Town</h1>
-      <p className="mt-3 max-w-lg text-lg text-zinc-600">
-        Ask a plain-English question about your business. Watch a simulated neighbourhood play it out
-        baseline vs. what-if.
-      </p>
-
-      <section className="mt-8 w-full space-y-4 rounded-lg border border-zinc-200 bg-white p-6">
-        <div>
-          <label className="block text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Business description
-          </label>
-          <textarea
-            value={businessDescription}
-            onChange={(e) => setBusinessDescription(e.target.value)}
-            rows={2}
-            className="mt-1 w-full rounded border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-zinc-500">
-              Business type
-            </label>
-            <select
-              value={businessType}
-              onChange={(e) => setBusinessType(e.target.value)}
-              className="mt-1 w-full rounded border border-zinc-200 px-3 py-2 text-sm"
-            >
-              <option value="cafe">Café</option>
-              <option value="barbershop">Barbershop</option>
-              <option value="taco_shop">Taco shop</option>
-              <option value="bakery">Bakery</option>
-              <option value="restaurant">Restaurant</option>
-              <option value="bike_shop">Bike shop</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-zinc-500">
-              Location
-            </label>
-            <input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="mt-1 w-full rounded border border-zinc-200 px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Your question
-          </label>
-          <textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            rows={2}
-            className="mt-1 w-full rounded border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
-          />
-          <div className="mt-2">
-            <QuestionChips onPick={setQuestion} />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={ask}
-            disabled={busy}
-            className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
-          >
-            {busy ? status.label : "Ask"}
-          </button>
-          <div className="flex items-center gap-1">
-            <select
-              value={preset}
-              onChange={(e) => setPreset(e.target.value as typeof preset)}
-              disabled={busy}
-              className="rounded-l-full border border-r-0 border-zinc-300 bg-white py-2 pl-4 pr-2 text-sm"
-            >
-              <option value="cafe">Café preset</option>
-              <option value="barbershop">Barbershop preset</option>
-              <option value="tacoshop">Taco shop preset</option>
-            </select>
-            <button
-              onClick={runPreset}
-              disabled={busy}
-              className="rounded-r-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Run
-            </button>
-          </div>
-          <a
-            href="/report/cached"
-            className="ml-auto text-sm text-zinc-600 underline hover:text-zinc-900"
-          >
-            Play cached demo →
+    <span className="brand">
+      <span className="brand-mark">
+        <CircleDot size={22} />
+      </span>
+      crowd<span className="brand-light">control</span>
+      <span className="beta">LAB</span>
+    </span>
+  );
+}
+function Metric({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+function Sources({ env }: { env: Environment }) {
+  return (
+    <div className="sources">
+      <p className="eyebrow">RESEARCH & ASSUMPTIONS</p>
+      <h2>A useful model, with its limits in view.</h2>
+      <p>{env.coverage}</p>
+      <span
+        className={`tag ${env.researchStatus === "unavailable" ? "warning" : ""}`}
+      >
+        {env.researchStatus === "succeeded"
+          ? "Live sources retrieved"
+          : env.researchStatus === "partial"
+            ? "Research retrieved · configuration fallback"
+            : "Research unavailable · assumptions only"}
+      </span>
+      <h3>What we assumed</h3>
+      <ul>
+        {env.assumptions.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ul>
+      <h3>External sources</h3>
+      {env.sources.length === 0 && (
+        <p>No usable external evidence was retrieved for this setup.</p>
+      )}
+      {env.sources.map((s) => (
+        <div className="source-card" key={s.id}>
+          <a href={s.url} target="_blank" rel="noreferrer">
+            {s.title}
+            <ExternalLink size={13} />
           </a>
+          <small>Retrieved {new Date(s.retrievedAt).toLocaleString()}</small>
+          <details>
+            <summary>Retrieved evidence</summary>
+            <p className="excerpt">{s.excerpt}</p>
+          </details>
         </div>
-        {status.kind === "clarify" && (
-          <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Planner needs one clarification: {status.message}
-          </p>
+      ))}
+      <h3>Where each detail came from</h3>
+      {env.provenance.map((p, i) => (
+        <div className="provenance" key={i}>
+          <span className="tag">{p.basis.replaceAll("_", " ")}</span>
+          <code>{p.targetPath}</code>
+          <p>{p.note}</p>
+          {p.sourceIds.map((id) => {
+            const source = env.sources.find((s) => s.id === id);
+            return source ? (
+              <a key={id} href={source.url} target="_blank" rel="noreferrer">
+                {source.title} ↗
+              </a>
+            ) : null;
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+function PersonInspector({
+  person: p,
+  env,
+  run,
+}: {
+  person: Person;
+  env: Environment;
+  run: Run;
+}) {
+  const place = env.places.find((l) => l.id === p.placeId);
+  return (
+    <>
+      <div
+        className="entity-icon"
+        style={{ background: env?.presentation?.[p.id]?.color ?? "#95a591" }}
+      >
+        <Users size={24} />
+      </div>
+      <p className="eyebrow">
+        {p.roleLabel} / {p.id.replace("person-", "#")}
+      </p>
+      <h2>{p.displayName}</h2>
+      <div className="inline-tags">
+        <span className="tag">{p.presence}</span>
+        <span className="tag">{p.mood}</span>
+      </div>
+      <section>
+        <h3>Right now</h3>
+        <p className="current-action">
+          {p.presence === "exited"
+            ? "Exited the environment"
+            : (p.currentAction?.label ?? "Observing the environment")}
+        </p>
+        <p className="muted">
+          {place
+            ? `At ${place.name}`
+            : `Position ${p.position.x.toFixed(1)}, ${p.position.z.toFixed(1)}`}
+        </p>
+        {p.pending && (
+          <small className="pending">
+            <LoaderCircle size={12} className="spin" /> Jev is considering the
+            next action
+          </small>
         )}
-        {status.kind === "error" && (
-          <p className="mt-2 rounded border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-            {status.message}
-          </p>
+        {p.decisionError && <p className="notice">{p.decisionError}</p>}
+      </section>
+      <section>
+        <h3>Goals</h3>
+        {p.goals.map((g) => (
+          <div className="goal" key={g.id}>
+            {g.status === "completed" ? (
+              <Check size={15} />
+            ) : (
+              <CircleDot size={15} />
+            )}
+            <span>
+              {g.description}
+              {g.targetId && (
+                <small>
+                  Target: {env.places.find((l) => l.id === g.targetId)?.name}
+                </small>
+              )}
+              {g.subjectKey && (
+                <small>
+                  Journey {g.subjectKey}
+                  {g.deadlineSeconds !== undefined
+                    ? ` · deadline ${time(g.deadlineSeconds)}`
+                    : ""}
+                </small>
+              )}
+            </span>
+          </div>
+        ))}
+      </section>
+      <section>
+        <div className="metrics-grid">
+          <Metric
+            label="Budget left"
+            value={
+              p.budgetRemainingCents === null
+                ? "N/A"
+                : money(p.budgetRemainingCents)
+            }
+          />
+          <Metric label="Queue patience" value={`${p.maxQueueWaitSeconds}s`} />
+        </div>
+        {(
+          [
+            ["Hunger", p.hunger],
+            ["Fatigue", p.fatigue],
+            ["Stress", p.stress],
+            ["Price sensitivity", p.priceSensitivity],
+            ["Crowd tolerance", p.crowdTolerance],
+          ] as [string, number][]
+        ).map(([label, value]) => (
+          <div className="need" key={label}>
+            <span>{label}</span>
+            <div>
+              <i style={{ width: `${value * 100}%` }} />
+            </div>
+            <small>{Math.round(value * 100)}%</small>
+          </div>
+        ))}
+      </section>
+      <section>
+        <h3>Interests</h3>
+        <div className="inline-tags">
+          {Object.entries(p.interests)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6)
+            .map(([name, score]) => (
+              <span className="tag" key={name}>
+                {name} {Math.round(score * 100)}%
+              </span>
+            ))}
+        </div>
+      </section>
+      <section>
+        <h3>What {p.displayName} knows</h3>
+        {p.knownEventIds.length ? (
+          p.knownEventIds.map((id) => (
+            <p key={id} className="knowledge">
+              {run.events.find((e) => e.id === id)?.title}
+            </p>
+          ))
+        ) : (
+          <p className="muted">No events perceived yet.</p>
         )}
       </section>
-
-      <p className="mt-6 text-xs text-zinc-500">
-        Mock Jev by default. Set <code>USE_MOCK_JEV=false</code> and{" "}
-        <code>JEV_WORKER_URL</code> in <code>.env.local</code> to hit real Jev via the Cloudflare Worker.
-        Set <code>ANTHROPIC_API_KEY</code> for real research/planner/report.
+      <section>
+        <h3>Recent experiences</h3>
+        {p.recentExperiences
+          .slice(-6)
+          .reverse()
+          .map((entry, i) => (
+            <p className="experience" key={i}>
+              {entry}
+            </p>
+          ))}
+      </section>
+      {p.lastDecision && (
+        <details>
+          <summary>Last accepted Jev decision</summary>
+          <p>{p.lastDecision.choice}</p>
+          <small>
+            At {time(p.lastDecision.at)} · input revision{" "}
+            {p.lastDecision.inputRevision}
+          </small>
+          <pre>{JSON.stringify(p.lastDecision.context, null, 2)}</pre>
+        </details>
+      )}
+    </>
+  );
+}
+function PlaceInspector({
+  place: p,
+  env,
+  run,
+}: {
+  place: Place;
+  env: Environment;
+  run: Run;
+}) {
+  const m = run.metrics[p.id],
+    products = run.products.filter((x) => x.placeId === p.id);
+  return (
+    <>
+      <div
+        className="entity-icon"
+        style={{ background: env?.presentation?.[p.id]?.color ?? "#95a591" }}
+      >
+        <MapPin size={24} />
+      </div>
+      <p className="eyebrow">{p.typeLabel}</p>
+      <h2>{p.name}</h2>
+      <p>{p.description}</p>
+      <div className="inline-tags">
+        <span className={`tag ${placeOpen(run, p.id) ? "" : "warning"}`}>
+          {placeOpen(run, p.id) ? "Open" : "Closed to new arrivals"}
+        </span>
+        {p.capabilities.map((c) => (
+          <span key={c} className="tag">
+            {c.replaceAll("_", " ")}
+          </span>
+        ))}
+      </div>
+      <section>
+        <div className="metrics-grid">
+          <Metric label="Visits" value={m.visits} />
+          <Metric
+            label="Occupancy"
+            value={`${occupancy(run, p.id)} / ${p.admissionCapacity}`}
+          />
+          {products.length > 0 && (
+            <>
+              <Metric label="Revenue" value={money(m.revenue)} />
+              <Metric
+                label="Purchases / units"
+                value={`${m.purchases} / ${m.unitsSold}`}
+              />
+            </>
+          )}
+        </div>
+      </section>
+      {products.length > 0 && (
+        <section>
+          <h3>Products & inventory</h3>
+          {products.map((product) => (
+            <div className="product" key={product.id}>
+              <div>
+                <strong>{product.name}</strong>
+                <small>
+                  {product.category} · {product.stockUnits} left
+                </small>
+              </div>
+              <div>
+                {effectivePrice(run, product.id) !== product.basePriceCents && (
+                  <del>{money(product.basePriceCents)}</del>
+                )}
+                <strong>{money(effectivePrice(run, product.id))}</strong>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+      <section>
+        <h3>Service points</h3>
+        {env.services
+          .filter((s) => s.placeId === p.id)
+          .map((s) => {
+            const state = run.services[s.id],
+              settings = serviceSettings(run, s);
+            return (
+              <div className="service-card" key={s.id}>
+                <strong>{s.label}</strong>
+                <small>
+                  {s.kind === "timed"
+                    ? "Free timed service"
+                    : "Single-item checkout"}{" "}
+                  · {settings.duration}s ·{" "}
+                  {s.interruptible
+                    ? "interruptible"
+                    : "finishes before reacting"}
+                </small>
+                <div className="metrics-grid">
+                  <Metric label="Waiting" value={state.queue.length} />
+                  <Metric
+                    label="Busy / slots"
+                    value={`${state.active.length} / ${settings.slots}`}
+                  />
+                </div>
+                {!placeOpen(run, p.id) && (
+                  <span className="tag">
+                    {state.active.length
+                      ? "Draining active services"
+                      : "Closed"}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        {!env.services.some((s) => s.placeId === p.id) && (
+          <p className="muted">An open area with no timed service.</p>
+        )}
+        <div className="metrics-grid">
+          <Metric label="Completions" value={m.serviceCompletions} />
+          <Metric
+            label="Mean queue wait"
+            value={
+              m.waitSamples
+                ? `${(m.waitTotal / m.waitSamples).toFixed(1)}s`
+                : "—"
+            }
+          />
+          <Metric label="Abandonments" value={m.abandonment} />
+          <Metric label="Interrupted" value={m.interrupted} />
+        </div>
+      </section>
+    </>
+  );
+}
+const rows: {
+  label: string;
+  key: keyof Metrics;
+  format?: (v: number) => string;
+}[] = [
+  { label: "Visits", key: "visits" },
+  { label: "Purchases", key: "purchases" },
+  { label: "Units sold", key: "unitsSold" },
+  { label: "Revenue", key: "revenue", format: money },
+  { label: "Service completions", key: "serviceCompletions" },
+  { label: "Queue abandonment", key: "abandonment" },
+  { label: "Interrupted services", key: "interrupted" },
+  { label: "Goals completed", key: "goalsCompleted" },
+];
+function Comparison({ results, env }: { results: Result[]; env: Environment }) {
+  const [place, setPlace] = useState("all");
+  const [a, b] = results;
+  if (!a)
+    return (
+      <>
+        <p className="eyebrow">RUN COMPARISON</p>
+        <h2>One baseline. Two possibilities.</h2>
+        <p>
+          Finish your first run, then reset to restore the same people,
+          products, knowledge and starting positions. The next run uses exactly
+          the same duration.
+        </p>
+      </>
+    );
+  const valid = b && comparable(a, b),
+    am = place === "all" ? a.totals : a.metrics[place],
+    bm = b ? (place === "all" ? b.totals : b.metrics[place]) : undefined;
+  return (
+    <>
+      <p className="eyebrow">RUN COMPARISON</p>
+      <h2>What changed?</h2>
+      <p>
+        {time(a.duration)} simulated time per run · identical starting state.
+        Fresh Jev choices can vary.
       </p>
+      <label className="select-label">
+        Compare{" "}
+        <select value={place} onChange={(e) => setPlace(e.target.value)}>
+          <option value="all">Entire environment</option>
+          {env.places.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {!valid && (
+        <p className="notice">
+          Run A is saved. Reset and complete Run B to compare equal durations.
+        </p>
+      )}
+      <table className="comparison">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>A</th>
+            <th>B</th>
+            <th>Change</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const x = am[row.key],
+              y = bm?.[row.key],
+              diff = y === undefined ? null : difference(x, y),
+              format = row.format ?? String;
+            return (
+              <tr key={row.key}>
+                <td>{row.label}</td>
+                <td>{format(x)}</td>
+                <td>{valid && y !== undefined ? format(y) : "—"}</td>
+                <td>
+                  {valid && diff ? (
+                    <>
+                      {diff.absolute > 0 ? "+" : ""}
+                      {format(diff.absolute)}
+                      <small>
+                        {diff.percent === null
+                          ? "N/A · zero baseline"
+                          : `${diff.percent.toFixed(1)}%`}
+                      </small>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          <tr>
+            <td>Mean queue wait</td>
+            <td>
+              {am.waitSamples
+                ? `${(am.waitTotal / am.waitSamples).toFixed(1)}s`
+                : "—"}
+            </td>
+            <td>
+              {valid && bm?.waitSamples
+                ? `${(bm.waitTotal / bm.waitSamples).toFixed(1)}s`
+                : "—"}
+            </td>
+            <td>
+              {valid && am.waitSamples && bm?.waitSamples
+                ? `${(bm.waitTotal / bm.waitSamples - am.waitTotal / am.waitSamples).toFixed(1)}s`
+                : "—"}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Interventions & timing</h3>
+      {results.map((r) => (
+        <div className="service-card" key={r.runId}>
+          <strong>{r.label}</strong>
+          {r.events.length ? (
+            r.events.map((e, i) => (
+              <p key={i}>
+                {time(e.at)} — {e.title}
+              </p>
+            ))
+          ) : (
+            <p className="muted">No interventions.</p>
+          )}
+        </div>
+      ))}
+      <p className="muted">
+        Illustrative outcomes under modeled assumptions. This is not a
+        statistically validated causal estimate.
+      </p>
+    </>
+  );
+}
+function EventCard({ event }: { event: Event }) {
+  return (
+    <details
+      className={`event-card ${event.status}`}
+      open={event.status === "failed" || event.status === "unsupported"}
+    >
+      <summary>
+        <span className="event-dot" />
+        <span>
+          {event.title}
+          <small>
+            {event.status} · {time(event.startTimeSeconds)}
+          </small>
+        </span>
+        <ChevronDown size={13} />
+      </summary>
+      <p>{event.description || event.originalText}</p>
+      <small>
+        {event.awareness === "announcement"
+          ? "Environment-wide announcement"
+          : `Local visibility · ${event.radius} units`}{" "}
+        · {event.durationSeconds}s
+      </small>
+      {event.approximationNotes.map((n, i) => (
+        <p className="muted" key={i}>
+          {n}
+        </p>
+      ))}
+      {event.effects.length > 0 && (
+        <details>
+          <summary>Applied mechanics</summary>
+          <pre>{JSON.stringify(event.effects, null, 2)}</pre>
+        </details>
+      )}
+    </details>
+  );
+}
+export default function Page() {
+  const [snapshot, setSnapshot] = useState<SessionSnapshot>();
+  const [description, setDescription] = useState("");
+  const [preview, setPreview] = useState<Environment>();
+  const [text, setText] = useState("");
+  const [selected, setSelected] = useState("");
+  const [panel, setPanel] = useState<
+    "entity" | "sources" | "compare" | "events"
+  >("entity");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [list, setList] = useState<"places" | "people">("places");
+  const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    setPreview(
+      compileEnvironment(
+        fallbackConfiguration("Illustrative preview"),
+        "Illustrative preview",
+        [],
+        "unavailable",
+        "preview",
+      ),
+    );
+    let alive = true,
+      socket: WebSocket | undefined,
+      retry: ReturnType<typeof setTimeout>;
+    const connect = () => {
+      if (!alive) return;
+      socket = new WebSocket(
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live`,
+      );
+      socket.onopen = () => {
+        if (alive) setConnected(true);
+      };
+      socket.onmessage = (e) => {
+        if (alive && e.data !== "pong") {
+          try {
+            setSnapshot(JSON.parse(e.data));
+          } catch {}
+        }
+      };
+      socket.onclose = () => {
+        if (alive) {
+          setConnected(false);
+          retry = setTimeout(connect, 2500);
+        }
+      };
+      socket.onerror = () => socket?.close();
+    };
+    api("session")
+      .then((state) => {
+        if (alive) {
+          setSnapshot(state);
+          setDescription(state.setup.description);
+          connect();
+        }
+      })
+      .catch((e) => {
+        if (alive) setError(e.message);
+      });
+    const poll = setInterval(() => {
+      if (alive && socket?.readyState !== WebSocket.OPEN)
+        api("session")
+          .then((s) => {
+            if (alive) setSnapshot(s);
+          })
+          .catch(() => {});
+    }, 5000);
+    return () => {
+      alive = false;
+      clearTimeout(retry);
+      clearInterval(poll);
+      socket?.close();
+    };
+  }, []);
+  const env = snapshot?.environment,
+    run = snapshot?.run;
+  const generating =
+    snapshot?.setup.status === "researching" ||
+    snapshot?.setup.status === "building";
+  const setupView = !env || editing || generating;
+  const select = (id: string) => {
+    setSelected(id);
+    setPanel("entity");
+  };
+  async function command(name: string, data: unknown = {}) {
+    setBusy(name);
+    setError("");
+    try {
+      const result = await api(name, data);
+      if (name !== "events") setSnapshot(result);
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Request failed");
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
+  async function generate(e: FormEvent) {
+    e.preventDefault();
+    if (await command("setup", { description })) {
+      setEditing(false);
+      setSelected("");
+    }
+  }
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (await command("events", { text })) {
+      setText("");
+      setPanel("events");
+    }
+  }
+  const person = run?.people.find((p) => p.id === selected),
+    place = env?.places.find((p) => p.id === selected);
+  const totals = run ? resultFor(run, "Live").totals : null;
+  return (
+    <main className={setupView ? "app onboarding" : "app workspace"}>
+      <header className="topbar">
+        <button
+          className="brand-button"
+          onClick={() => {
+            if (env) {
+              setEditing(true);
+              setDescription(env.description);
+            }
+          }}
+          aria-label="Describe a new environment"
+        >
+          <Brand />
+        </button>
+        <div className="topbar-right">
+          {env && !setupView && (
+            <>
+              <span className="session-name">{env.name}</span>
+              <button
+                className="text-button"
+                onClick={() =>
+                  setPanel(panel === "sources" ? "entity" : "sources")
+                }
+              >
+                <Globe2 size={15} /> Sources & assumptions
+              </button>
+            </>
+          )}
+          <span className="live-badge">
+            <i className={connected ? "online" : "offline"} />
+            {run?.status === "running" ? "LIVE SIMULATION" : "SCENARIO LAB"}
+          </span>
+        </div>
+      </header>
+      {error && (
+        <div className="error-toast" role="alert">
+          {error}
+          <button onClick={() => setError("")} aria-label="Dismiss error">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      {setupView ? (
+        <div className="onboarding-content">
+          <div className="onboarding-copy">
+            <span className="eyebrow">
+              <span className="tiny-dot" /> SMALL WORLDS. BIG WHAT-IFS.
+            </span>
+            <h1>
+              A place.
+              <br />
+              Its people.
+              <br />
+              <em>Your what if.</em>
+            </h1>
+            <p className="intro">
+              Turn a description into a living world. Change something, follow
+              the people, and see what happens next.
+            </p>
+            <form onSubmit={generate}>
+              <label htmlFor="description">
+                What kind of place are we exploring?
+              </label>
+              <div className="description-box">
+                <textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="A busy amusement park with two popular rides, food stalls, and a gift shop…"
+                  minLength={5}
+                  maxLength={1000}
+                  required
+                  disabled={generating}
+                  rows={3}
+                />
+                <div className="description-footer">
+                  <span>
+                    <Globe2 size={13} /> Grounded in live research
+                  </span>
+                  <button className="primary" disabled={!!busy || generating}>
+                    {generating ? (
+                      <LoaderCircle className="spin" size={17} />
+                    ) : (
+                      <ArrowRight size={18} />
+                    )}
+                    {generating ? "Creating" : "Create world"}
+                  </button>
+                </div>
+              </div>
+            </form>
+            {generating ? (
+              <div className="setup-progress" role="status">
+                <div className="progress-track">
+                  <span />
+                </div>
+                <strong>
+                  {snapshot?.setup.status === "researching"
+                    ? "01 · Researching the environment"
+                    : "02 · Building your world"}
+                </strong>
+                <p>{snapshot?.setup.message}</p>
+                <small>
+                  Bounded research and generation; usually under 80 seconds.
+                </small>
+              </div>
+            ) : (
+              <>
+                <div className="suggestions">
+                  <span>Try a starting point</span>
+                  {[
+                    "An amusement park with rides and a gift shop",
+                    "Toronto Pearson Terminal 1 with gates and shops",
+                    "A bustling night market with food stalls",
+                  ].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setDescription(s)}
+                    >
+                      {s}
+                      <ArrowUpRight size={13} />
+                    </button>
+                  ))}
+                </div>
+                {snapshot?.setup.status === "failed" && (
+                  <p className="notice">{snapshot.setup.message}</p>
+                )}
+                {editing && (
+                  <button
+                    className="text-button"
+                    onClick={() => setEditing(false)}
+                  >
+                    Return to current world
+                  </button>
+                )}
+              </>
+            )}
+            <p className="onboarding-footnote">
+              Researched context. Assumed operations. Possibilities, not
+              predictions.
+            </p>
+          </div>
+          <div className="preview-pane">
+            {preview && (
+              <World environment={preview} preview onSelect={() => {}} />
+            )}
+            <div className="preview-caption">
+              <span className="tag">
+                <Layers3 size={13} /> Illustrative preview
+              </span>
+              <p>Every person has somewhere to be.</p>
+              <small>Your description creates a new environment.</small>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className={`world-pane ${!run ? "summary-world" : ""}`}>
+            <World
+              environment={env!}
+              run={run}
+              selected={selected}
+              onSelect={select}
+            />
+            {run && (
+              <>
+                <div className="world-top">
+                  <div className="run-chip">
+                    <span className="tiny-dot" />
+                    <strong>
+                      {run.status === "running"
+                        ? "Run in progress"
+                        : "Run complete"}
+                    </strong>
+                    <span>
+                      {time(run.time)} / {time(run.duration)}
+                    </span>
+                  </div>
+                  <div className="world-actions">
+                    <button
+                      onClick={() => setPanel("compare")}
+                      title="Compare runs"
+                    >
+                      <Layers3 size={16} /> Compare
+                    </button>
+                    <button
+                      disabled={!!busy}
+                      onClick={async () => {
+                        if (await command("reset")) setPanel("entity");
+                      }}
+                    >
+                      <RotateCcw size={15} /> Reset baseline
+                    </button>
+                    {run.status === "running" && (
+                      <button
+                        disabled={
+                          !!busy ||
+                          run.time < 10 ||
+                          (!!snapshot!.results.length &&
+                            run.time < snapshot!.results[0].duration)
+                        }
+                        onClick={async () => {
+                          if (await command("finish")) setPanel("compare");
+                        }}
+                      >
+                        Finish run
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="world-metrics">
+                  <Metric
+                    label="People inside"
+                    value={
+                      run.people.filter((p) => p.presence === "inside").length
+                    }
+                  />
+                  <Metric label="Purchases" value={totals!.purchases} />
+                  <Metric label="Revenue" value={money(totals!.revenue)} />
+                  <Metric
+                    label="Services completed"
+                    value={totals!.serviceCompletions}
+                  />
+                </div>
+                <div className="map-help">
+                  <Compass size={14} /> Drag to orbit · scroll to zoom · click
+                  to inspect
+                </div>
+                <div className="integration-status">
+                  {run.jevAccepted} Jev choices accepted
+                  {run.jevFailed > 0
+                    ? ` · ${run.jevFailed} failed, retrying`
+                    : ""}{" "}
+                  ·{" "}
+                  {connected ? "Connected" : "Reconnecting; showing last state"}
+                </div>
+              </>
+            )}
+          </div>
+          {!run ? (
+            <div className="summary-overlay">
+              <div className="summary-card">
+                <span className="eyebrow">
+                  <Check size={14} /> YOUR WORLD IS READY
+                </span>
+                <h1>{env!.name}</h1>
+                <p>{env!.summary}</p>
+                <div className="summary-stats">
+                  <span>
+                    <MapPin size={16} />
+                    {env!.places.length} places
+                  </span>
+                  <span>
+                    <Users size={16} />
+                    40 people
+                  </span>
+                  <span>
+                    <Globe2 size={16} />
+                    {env!.sources.length} sources
+                  </span>
+                </div>
+                <div className="inline-tags">
+                  {env!.places.map((p) => (
+                    <span key={p.id} className="tag">
+                      {p.name}
+                    </span>
+                  ))}
+                </div>
+                <p className="notice">
+                  Approximate layout · Synthetic population · Assumed operating
+                  parameters
+                  {env!.researchStatus !== "succeeded"
+                    ? ` · ${env!.researchStatus === "unavailable" ? "Research unavailable" : "Partial setup fallback"}`
+                    : ""}
+                </p>
+                <details>
+                  <summary>Sources, assumptions & included area</summary>
+                  <Sources env={env!} />
+                </details>
+                <div className="summary-actions">
+                  <button
+                    className="text-button"
+                    onClick={() => setEditing(true)}
+                  >
+                    Revise description
+                  </button>
+                  <button
+                    className="primary"
+                    disabled={!!busy}
+                    onClick={() => command("start")}
+                  >
+                    Start simulation <ArrowRight size={17} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <nav className="entity-list" aria-label="Environment entities">
+                <div className="segmented">
+                  <button
+                    className={list === "places" ? "active" : ""}
+                    onClick={() => setList("places")}
+                  >
+                    Places
+                  </button>
+                  <button
+                    className={list === "people" ? "active" : ""}
+                    onClick={() => setList("people")}
+                  >
+                    People
+                  </button>
+                </div>
+                <div className="entity-scroll">
+                  {list === "places"
+                    ? env!.places.map((p) => (
+                        <button
+                          className={selected === p.id ? "selected" : ""}
+                          key={p.id}
+                          onClick={() => select(p.id)}
+                        >
+                          <span
+                            className="entity-swatch"
+                            style={{
+                              background:
+                                env?.presentation?.[p.id]?.color ?? "#95a591",
+                            }}
+                          />
+                          <span>
+                            {p.name}
+                            <small>{p.typeLabel}</small>
+                          </span>
+                          <span className="entity-count">
+                            {occupancy(run, p.id)}
+                          </span>
+                        </button>
+                      ))
+                    : run.people.map((p) => (
+                        <button
+                          key={p.id}
+                          className={selected === p.id ? "selected" : ""}
+                          onClick={() => select(p.id)}
+                        >
+                          <span
+                            className="entity-swatch person-swatch"
+                            style={{
+                              background:
+                                env?.presentation?.[p.id]?.color ?? "#95a591",
+                            }}
+                          />
+                          <span>
+                            {p.displayName}
+                            <small>
+                              {p.presence === "exited"
+                                ? "Exited"
+                                : (p.currentAction?.type.replaceAll("_", " ") ??
+                                  "Observing")}
+                            </small>
+                          </span>
+                        </button>
+                      ))}
+                </div>
+                <button
+                  className="new-world text-button"
+                  onClick={() => setEditing(true)}
+                >
+                  Describe another place <ArrowUpRight size={13} />
+                </button>
+              </nav>
+              <aside className="inspector">
+                <div className="inspector-tabs">
+                  <button
+                    className={panel === "entity" ? "active" : ""}
+                    onClick={() => setPanel("entity")}
+                  >
+                    Inspect
+                  </button>
+                  <button
+                    className={panel === "events" ? "active" : ""}
+                    onClick={() => setPanel("events")}
+                  >
+                    Events <span>{run.events.length}</span>
+                  </button>
+                  <button
+                    className={panel === "compare" ? "active" : ""}
+                    onClick={() => setPanel("compare")}
+                  >
+                    Compare
+                  </button>
+                </div>
+                <div className="inspector-content">
+                  {panel === "sources" ? (
+                    <Sources env={env!} />
+                  ) : panel === "compare" ? (
+                    <Comparison results={snapshot!.results} env={env!} />
+                  ) : panel === "events" ? (
+                    <>
+                      <p className="eyebrow">THE RIPPLE EFFECT</p>
+                      <h2>Changes to this world.</h2>
+                      <p>
+                        Events are interpreted into supported effects. People
+                        react only to what they perceive.
+                      </p>
+                      {run.events.length ? (
+                        [...run.events]
+                          .reverse()
+                          .map((e) => <EventCard key={e.id} event={e} />)
+                      ) : (
+                        <div className="empty-state">
+                          <Sparkles size={28} />
+                          <h3>Make something happen.</h3>
+                          <p>
+                            Try a promotion, a service change, or a very
+                            unexpected visitor.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  ) : person ? (
+                    <PersonInspector person={person} env={env!} run={run} />
+                  ) : place ? (
+                    <PlaceInspector place={place} env={env!} run={run} />
+                  ) : (
+                    <>
+                      <p className="eyebrow">A WORLD IN MOTION</p>
+                      <h2>Follow the little things.</h2>
+                      <p>
+                        Click a person to follow their goals and choices. Pick a
+                        place to see its queues, stock and activity.
+                      </p>
+                      <div className="empty-illustration">
+                        <Users size={48} strokeWidth={1.1} />
+                        <MapPin size={36} strokeWidth={1.1} />
+                      </div>
+                      <h3>What will you change?</h3>
+                      <p>
+                        People make individual decisions. An offer, closure or
+                        announcement can change what they know and where they
+                        go.
+                      </p>
+                      <button
+                        className="text-button"
+                        onClick={() => setPanel("sources")}
+                      >
+                        Explore the assumptions <ArrowUpRight size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </aside>
+              <form className="event-composer" onSubmit={submit}>
+                <div className="event-prompt">
+                  <Sparkles size={18} />
+                  <textarea
+                    ref={input}
+                    aria-label="Describe an event"
+                    placeholder={
+                      run.status === "running"
+                        ? "What happens next? Describe an event…"
+                        : "Run complete. Reset the baseline to try another scenario."
+                    }
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (
+                          text.trim().length >= 3 &&
+                          !busy &&
+                          run.status === "running"
+                        )
+                          e.currentTarget.form?.requestSubmit();
+                      }
+                    }}
+                    rows={1}
+                    minLength={3}
+                    maxLength={1000}
+                    required
+                    disabled={run.status !== "running"}
+                  />
+                  <button
+                    className="primary"
+                    disabled={
+                      !!busy ||
+                      run.status !== "running" ||
+                      text.trim().length < 3
+                    }
+                  >
+                    {busy === "events" ? (
+                      <LoaderCircle className="spin" size={16} />
+                    ) : (
+                      <ArrowRight size={18} />
+                    )}
+                    <span>Introduce event</span>
+                  </button>
+                </div>
+                <div className="event-suggestions">
+                  <span>TRY</span>
+                  {[
+                    env!.places.find((p) => p.capabilities.includes("purchase"))
+                      ? `Announce 20% off at ${env!.places.find((p) => p.capabilities.includes("purchase"))!.name} for five minutes`
+                      : "Announce a gathering at the central plaza",
+                    "A dinosaur enters the central plaza",
+                  ].map((s) => (
+                    <button
+                      type="button"
+                      key={s}
+                      onClick={() => {
+                        setText(s);
+                        input.current?.focus();
+                      }}
+                    >
+                      {s}
+                      <ArrowUpRight size={12} />
+                    </button>
+                  ))}
+                </div>
+              </form>
+            </>
+          )}
+        </>
+      )}
     </main>
   );
 }
