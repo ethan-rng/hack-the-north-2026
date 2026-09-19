@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeJevResponse } from "./jev-response";
 
 const MODEL = "typesafe/jev";
 const MAX_BYTES = 64 * 1024;
@@ -120,7 +121,9 @@ export default {
         throw new HttpError(signal.aborted ? 504 : 502, signal.aborted ? "inference_timeout" : "inference_failed",
           "Jev inference did not complete; preserve the person's current behavior and retry later");
       }
-      if (!result.answers || typeof result.answers !== "object" || Array.isArray(result.answers)) {
+      try {
+        result = normalizeJevResponse(result);
+      } catch {
         throw new HttpError(502, "invalid_model_response", "Jev returned no structured answers");
       }
       console.log(JSON.stringify({ event: "jev_completed", requestId, durationMs: Date.now() - start }));
