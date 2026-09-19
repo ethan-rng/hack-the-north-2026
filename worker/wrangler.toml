@@ -1,0 +1,15 @@
+name = "htn26-jev-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# Workers AI binding — calls typesafe/jev via env.AI.run().
+# No API key needed; billed to your Cloudflare account.
+[ai]
+binding = "AI"
+
+[vars]
+JEV_RATE_PER_SEC = "18"
+JEV_BURST = "30"
+JEV_MAX_RETRIES = "3"
+# CORS allowlist — swap when deploying Next.js somewhere other than localhost.
+CORS_ALLOWED_ORIGIN = "http://localhost:3000"
