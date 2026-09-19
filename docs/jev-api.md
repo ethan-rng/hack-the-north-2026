@@ -4,11 +4,13 @@ The Cloudflare Worker exposes `typesafe/jev` for Crowd Control's individual deci
 
 ## Deployment status
 
-The Worker, endpoint secret, and gateway connection are deployed to Julian's Cloudflare account (`juelzlax@gmail.com`, account `5123e5b48cbca84dedd3925e6085c866`). Authentication, validation, and health checks pass. **Live inference is blocked by insufficient AI Gateway credits.** After connecting the gateway, a diagnostic model call returned HTTP 402, code 2021: "Insufficient balance; add money to your gateway or use BYOK". Gateway authentication is no longer the blocker.
+The Worker, endpoint secret, and gateway connection are deployed to Julian's Cloudflare account (`juelzlax@gmail.com`, account `5123e5b48cbca84dedd3925e6085c866`). **Live Jev inference is verified working.** On September 19, 2026, the deployed endpoint returned `jev-1.13.0`, selecting `move_to_food` from the fixture's offered actions in 641 ms end to end (one smoke test, not a latency guarantee). Authentication and validation checks also pass.
 
-In [AI Gateway](https://dash.cloudflare.com/5123e5b48cbca84dedd3925e6085c866/ai/ai-gateway), open Credits Available → Manage and load credits. A provider key stored through BYOK is an alternative. No credit purchase was made during deployment. After funding, run the smoke test below; no endpoint key rotation or code change is needed. A healthy HTTP service alone does not prove Jev access.
+The endpoint unwraps Cloudflare's `Completed` result envelope so callers receive Jev's `model`, `answers`, and `usage` directly. Failed, pending, and malformed results are rejected. AI Gateway credits fund inference; manage the balance in [AI Gateway](https://dash.cloudflare.com/5123e5b48cbca84dedd3925e6085c866/ai/ai-gateway). Teammates can use the existing endpoint key without a Cloudflare login.
 
 ## Calling from a teammate's backend
+
+The repo also contains a separate `worker/` proxy and `src/jev/worker.ts` client from the application implementation. That client currently calls `/jev` without this endpoint's bearer authentication and expects a different response shape. Setting its `JEV_WORKER_URL` to this service alone will not work; adapt that client to the contract below before using this service from the app.
 
 - Base URL: `https://crowd-control-jev.juelzlax.workers.dev`
 - Inference: `POST /v1/jev`
@@ -88,7 +90,7 @@ Retain `setupId`, `runId`, `personId`, decision identity, and `basedOnRevision` 
 
 ## Development and deployment
 
-Use Node.js 22 or later:
+Use Node.js 22.6 or later (the unit tests use native TypeScript stripping):
 
 ```sh
 cd services/jev-worker
@@ -97,6 +99,7 @@ cp .dev.vars.example .dev.vars # Only on a fresh checkout; set a local endpoint 
 npx wrangler login           # Only maintainers need this, if not already authenticated.
 npm run types
 npm run check
+npm run test:unit
 npm run dev
 ```
 

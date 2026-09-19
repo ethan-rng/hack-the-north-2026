@@ -8,7 +8,8 @@
     "types": "wrangler types",
     "check": "tsc --noEmit",
     "test": "node --test scripts/api.test.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "test:unit": "node --experimental-strip-types --test scripts/response.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
