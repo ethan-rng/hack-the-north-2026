@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getRun, saveRun } from "@/lib/runs";
-import { persistRun } from "@/lib/runPersistence";
 import { report, fallbackReport } from "@/llm/report";
 
 export const runtime = "nodejs";
@@ -27,6 +26,5 @@ export async function POST(_req: Request, ctx: { params: Promise<{ runId: string
     usedFallback = true;
   }
   saveRun(run);
-  persistRun(run).catch(() => {});
   return NextResponse.json({ runId, summary: run.summary, fallback: usedFallback });
 }

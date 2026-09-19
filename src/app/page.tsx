@@ -263,9 +263,14 @@ export default function Home() {
                 Run
               </button>
             </div>
-            <a href="/report/cached" className="ml-auto text-sm text-[var(--color-ink-muted)] underline decoration-[var(--color-app-border-strong)] underline-offset-4 hover:text-[var(--color-ink)]">
-              Play cached demo →
-            </a>
+            <div className="ml-auto flex items-center gap-4 text-sm text-[var(--color-ink-muted)]">
+              <a href="/runs" className="underline decoration-[var(--color-app-border-strong)] underline-offset-4 hover:text-[var(--color-ink)]">
+                Past runs
+              </a>
+              <a href="/report/cached" className="underline decoration-[var(--color-app-border-strong)] underline-offset-4 hover:text-[var(--color-ink)]">
+                Cached demo →
+              </a>
+            </div>
           </div>
         </section>
 

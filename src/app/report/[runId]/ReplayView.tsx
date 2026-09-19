@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PixiCanvas } from "@/replay/PixiCanvas";
+import { LowPolyScene } from "@/replay/LowPolyScene";
 import { ReplayControls } from "@/replay/controls";
 import type { Event, RunResult } from "@/sim/schema";
 import { totalTicks, tickToClock } from "@/sim/state";
@@ -53,7 +53,7 @@ export function ReplayView({ run }: Props) {
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-ink-subtle)]" />
               <span className="text-xs font-medium uppercase tracking-wider text-[var(--color-ink-muted)]">Baseline</span>
             </div>
-            <PixiCanvas
+            <LowPolyScene
               spec={run.spec}
               events={run.baseline.events}
               currentTick={tick}
@@ -68,7 +68,7 @@ export function ReplayView({ run }: Props) {
                 What if — {run.spec.change.label}
               </span>
             </div>
-            <PixiCanvas
+            <LowPolyScene
               spec={run.spec}
               events={run.what_if.events}
               currentTick={tick}

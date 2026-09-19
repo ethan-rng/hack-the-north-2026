@@ -6,7 +6,6 @@ import { newRunId, saveRun } from "@/lib/runs";
 import { validateSimSpec } from "@/sim/validator";
 import type { SimSpec } from "@/sim/schema";
 import { report, fallbackReport } from "@/llm/report";
-import { persistRun } from "@/lib/runPersistence";
 
 function hintFromError(msg: string): string | undefined {
   if (/Insufficient AI Gateway credits/i.test(msg))
@@ -65,9 +64,6 @@ export async function POST(req: Request) {
     }
   }
   saveRun(result);
-  // Fire-and-forget persistence so the report survives dev restarts and can be
-  // opened via a shareable link.
-  persistRun(result).catch(() => {});
   return NextResponse.json({
     runId: result.runId,
     seed: result.seed,

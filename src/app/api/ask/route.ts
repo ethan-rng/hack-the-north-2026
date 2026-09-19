@@ -5,7 +5,6 @@ import { runSpec } from "@/sim/runSpec";
 import { report, fallbackReport } from "@/llm/report";
 import { getJevClient } from "@/jev";
 import { newRunId, saveRun } from "@/lib/runs";
-import { persistRun } from "@/lib/runPersistence";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -117,7 +116,6 @@ export async function POST(req: Request) {
   timings.report_ms = Date.now() - t3;
 
   saveRun(result);
-  persistRun(result).catch(() => {});
   return NextResponse.json({
     runId: result.runId,
     template: planResult.template,
