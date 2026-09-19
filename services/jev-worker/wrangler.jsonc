@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "crowd-control-jev",
+  "account_id": "5123e5b48cbca84dedd3925e6085c866",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "ai": { "binding": "AI", "remote": true },
+  "observability": { "enabled": true, "head_sampling_rate": 1 }
+}

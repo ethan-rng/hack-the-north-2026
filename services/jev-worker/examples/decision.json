@@ -1,0 +1,32 @@
+{
+  "state": {
+    "setupId": "demo-setup",
+    "runId": "demo-run-1",
+    "personId": "visitor-1",
+    "basedOnRevision": 12,
+    "person": {
+      "goals": [{ "kind": "eat", "description": "Get lunch", "priority": 0.9 }],
+      "budgetRemainingCents": 1800,
+      "hunger": 0.85,
+      "fatigue": 0.1,
+      "currentAction": null,
+      "knownEventIds": [],
+      "recentExperiences": []
+    },
+    "perceivedSurroundings": {
+      "foodStall": { "id": "food-1", "status": "open", "mealPriceCents": 900, "queueWaitSeconds": 15 },
+      "bench": { "id": "bench-1", "status": "open" }
+    }
+  },
+  "questions": {
+    "nextAction": {
+      "type": "choice",
+      "instructions": "Choose this person's next action using only their goals, needs, budget and perceived surroundings. The engine has verified these options are currently valid.",
+      "criteria": {
+        "move_to_food": "Move to food-1 to buy lunch for 900 cents after a 15-second queue.",
+        "rest_at_bench": "Rest at bench-1 to reduce fatigue.",
+        "wait_here": "Wait at the current location."
+      }
+    }
+  }
+}
