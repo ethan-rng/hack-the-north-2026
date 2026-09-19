@@ -1,12 +1,12 @@
 # Jev team API
 
-The Cloudflare Worker exposes `typesafe/jev` for Crowd Control's individual decisions. It forwards native Jev `state` and typed `questions` directly to the Workers AI binding with `env.AI.run("typesafe/jev", input)`. No explicit AI Gateway is configured. The simulation backend owns action eligibility, state, and execution.
+The Cloudflare Worker exposes `typesafe/jev` for Crowd Control's individual decisions. It sends native Jev `state` and typed `questions` through the Workers AI binding, using the authenticated `crowd-control` AI Gateway. The simulation backend owns action eligibility, state, and execution.
 
 ## Deployment status
 
-The Worker and endpoint secret are deployed to Julian's Cloudflare account (`juelzlax@gmail.com`, account `5123e5b48cbca84dedd3925e6085c866`). Authentication, validation, and health checks pass. **Live inference is blocked by Cloudflare account/model access.** The direct model call failed; a diagnostic call to the documented Cloudflare REST endpoint returned error 2049: "Gateway authentication is required to use unified billing. Enable authentication on your gateway or provide your own API key (BYOK)." The available credentials can deploy Workers but cannot administer AI Gateway.
+The Worker, endpoint secret, and gateway connection are deployed to Julian's Cloudflare account (`juelzlax@gmail.com`, account `5123e5b48cbca84dedd3925e6085c866`). Authentication, validation, and health checks pass. **Live inference is blocked by insufficient AI Gateway credits.** After connecting the gateway, a diagnostic model call returned HTTP 402, code 2021: "Insufficient balance; add money to your gateway or use BYOK". Gateway authentication is no longer the blocker.
 
-Cloudflare lists `typesafe/jev` as a third-party model; its binding documentation says third-party models require an authenticated gateway with unified billing or provider credentials. Searching this account's Workers AI catalog for `jev` returned no native model entries. Julian requested the direct Workers AI path, so the implementation retains that path while this access requirement is resolved with Cloudflare/TypeSafe. No gateway or credit purchase was made. After access is resolved, run the live smoke test below; a healthy HTTP service alone does not prove Jev access.
+In [AI Gateway](https://dash.cloudflare.com/5123e5b48cbca84dedd3925e6085c866/ai/ai-gateway), open Credits Available → Manage and load credits. A provider key stored through BYOK is an alternative. No credit purchase was made during deployment. After funding, run the smoke test below; no endpoint key rotation or code change is needed. A healthy HTTP service alone does not prove Jev access.
 
 ## Calling from a teammate's backend
 
@@ -78,7 +78,7 @@ Request bodies are limited to 64 KiB. Question/option IDs are at most 128 charac
 | 503 | Worker endpoint key missing |
 | 504 | Inference timeout |
 
-Preserve the current behavior on failed inference. Use bounded concurrency (start with four in-flight person decisions) and at most one delayed retry for transient failures; do not keep retrying account setup errors. Do not run inference on animation frames. The endpoint implements no response cache or automatic retries. Account/provider quotas still apply; this endpoint does not impose a global spending cap.
+Preserve the current behavior on failed inference. Use bounded concurrency (start with four in-flight person decisions) and at most one delayed retry for transient failures; do not keep retrying account setup errors. Do not run inference on animation frames. The endpoint disables gateway response caching (`skipCache: true`) and performs no automatic retries. Account/provider quotas still apply; this endpoint does not impose a global spending cap.
 
 ## PRD integration responsibilities
 
@@ -109,7 +109,7 @@ npm run deploy
 npx wrangler secret put JEV_API_KEY
 ```
 
-The secret prompt is interactive. Changing it invalidates the old team key; update teammates' environments privately. Never deploy `.env.team` or `.dev.vars` as source. Deployment targets the account explicitly named in `wrangler.jsonc`.
+The secret prompt is interactive. Changing it invalidates the old team key; update teammates' environments privately. Never deploy `.env.team` or `.dev.vars` as source. `AI_GATEWAY_ID` in `wrangler.jsonc` selects `crowd-control`. The Workers AI binding authenticates within the account without an additional Cloudflare API token. Deployment targets the account explicitly named in `wrangler.jsonc`.
 
 After receiving `.env.team`, verify the deployed service (Node 22+):
 

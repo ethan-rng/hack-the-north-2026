@@ -111,7 +111,10 @@ export default {
       const signal = AbortSignal.timeout(20_000);
       let result: Record<string, unknown>;
       try {
-        result = await env.AI.run(MODEL, parsed.data, { signal });
+        result = await env.AI.run(MODEL, parsed.data, {
+          signal,
+          gateway: { id: env.AI_GATEWAY_ID, skipCache: true },
+        });
       } catch {
         // Do not log state, credentials, or upstream errors that may echo inputs.
         throw new HttpError(signal.aborted ? 504 : 502, signal.aborted ? "inference_timeout" : "inference_failed",
