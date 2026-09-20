@@ -803,15 +803,18 @@ function EventCard({ event }: { event: Event }) {
 }
 function EventImpactBrief({
   impact,
-  segment,
   onClose,
   onWatch,
 }: {
   impact: EventImpact;
-  segment: Segment;
   onClose: () => void;
   onWatch: () => void;
 }) {
+  const boldNumbers = (text: string) =>
+    text.split(/([+−-]?\$?\d[\d,.]*)/g).map((part, index) =>
+      /\d/.test(part) ? <b key={`${part}-${index}`}>{part}</b> : part,
+    );
+
   return (
     <div className="impact-backdrop" onClick={onClose}>
       <section
@@ -822,23 +825,20 @@ function EventImpactBrief({
         onClick={(event) => event.stopPropagation()}
       >
         <header>
-          <span className="eyebrow">
-            <Sparkles size={14} /> EVENT IMPACT · {segment.duration} SECONDS
-          </span>
           <button type="button" onClick={onClose} aria-label="Close impact brief">
             <X size={18} />
           </button>
         </header>
-        <h2 id="impact-headline">{impact.headline}</h2>
-        <p className="impact-summary">{impact.summary}</p>
+        <h2 id="impact-headline">{boldNumbers(impact.headline)}</h2>
+        <p className="impact-summary">{boldNumbers(impact.summary)}</p>
         <div className="impact-metrics" aria-label="Before and after metrics">
           {impact.metrics.map((metric) => (
             <div key={metric.label} className={`impact-metric ${metric.direction}`}>
-              <span>{metric.label}</span>
+              <span>{boldNumbers(metric.label)}</span>
               <strong>
-                {metric.before} <i>→</i> {metric.after}
+                {boldNumbers(metric.before)} <i>→</i> {boldNumbers(metric.after)}
               </strong>
-              <small>{metric.delta}</small>
+              <small>{boldNumbers(metric.delta)}</small>
             </div>
           ))}
         </div>
@@ -847,7 +847,7 @@ function EventImpactBrief({
             <h3>The crowd response</h3>
             <ul>
               {impact.consequences.slice(0, 4).map((consequence) => (
-                <li key={consequence}>{consequence}</li>
+                <li key={consequence}>{boldNumbers(consequence)}</li>
               ))}
             </ul>
           </section>
@@ -857,7 +857,7 @@ function EventImpactBrief({
               <ul className="impact-stories">
                 {impact.stories.map((story) => (
                   <li key={story.name}>
-                    <b>{story.name}</b> {story.detail}
+                    <b>{story.name}</b> {boldNumbers(story.detail)}
                   </li>
                 ))}
               </ul>
@@ -1277,14 +1277,12 @@ export default function Page() {
         <div className="onboarding-content">
           <div className="onboarding-copy">
             <span className="eyebrow">
-              <span className="tiny-dot" /> SMALL WORLDS. BIG WHAT-IFS.
+              <span className="tiny-dot" /> COMMOTION · WORLDS IN MOTION
             </span>
             <h1>
-              A place.
+              Create a little
               <br />
-              Its people.
-              <br />
-              <em>Your what if.</em>
+              <em>commotion.</em>
             </h1>
             <p className="intro">
               Turn a description into a living world. Change something, follow
@@ -1292,7 +1290,7 @@ export default function Page() {
             </p>
             <form onSubmit={generate}>
               <label htmlFor="description">
-                What kind of place are we exploring?
+                Where should the commotion begin?
               </label>
               <div className="description-box">
                 <textarea
@@ -1319,7 +1317,7 @@ export default function Page() {
                     ) : (
                       <ArrowRight size={18} />
                     )}
-                    {generating ? "Creating" : "Create world"}
+                    {generating ? "Creating" : "Build the world"}
                   </button>
                 </div>
               </div>
@@ -1342,7 +1340,7 @@ export default function Page() {
             ) : (
               <>
                 <div className="suggestions">
-                  <span>Try a starting point</span>
+                  <span>Start the commotion somewhere</span>
                   {[
                     "An amusement park with rides and a gift shop",
                     "Toronto Pearson Terminal 1 with gates and shops",
@@ -1372,8 +1370,7 @@ export default function Page() {
               </>
             )}
             <p className="onboarding-footnote">
-              Researched context. Assumed operations. Possibilities, not
-              predictions.
+              Real context. Imagined commotion. Possibilities, not predictions.
             </p>
           </div>
           <div className="preview-pane">
@@ -1384,8 +1381,8 @@ export default function Page() {
               <span className="tag">
                 <Layers3 size={13} /> Illustrative preview
               </span>
-              <p>Every person has somewhere to be.</p>
-              <small>Your description creates a new environment.</small>
+              <p>A calm world, waiting for commotion.</p>
+              <small>Your description decides where it begins.</small>
             </div>
           </div>
         </div>
@@ -1824,7 +1821,6 @@ export default function Page() {
       {impact && (
         <EventImpactBrief
           impact={impact}
-          segment={snapshot!.segments.find((item) => item.id === impact.segmentId)!}
           onClose={() => setImpact(undefined)}
           onWatch={() => {
             playback.playSegment(impact.segmentId);

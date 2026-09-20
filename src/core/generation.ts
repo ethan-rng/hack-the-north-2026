@@ -133,7 +133,7 @@ export const eventSchema = z.object({
   description: z.string().max(500),
   durationSeconds: z.number().int().min(1).max(3600),
   placeId: z.string().nullable(),
-  visual: z.enum(["dinosaur", "marker"]),
+  visual: z.enum(["dinosaur", "marker", "ufo"]),
   approximationNotes: z.array(z.string().max(300)).max(8),
   effects: z
     .array(

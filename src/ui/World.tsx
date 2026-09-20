@@ -1,7 +1,13 @@
 "use client";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, OrbitControls, OrthographicCamera } from "@react-three/drei";
+import {
+  Html,
+  OrbitControls,
+  OrthographicCamera,
+  Stars,
+} from "@react-three/drei";
 import { Component, useMemo, useRef, useState, type ReactNode } from "react";
+import type { Group } from "three";
 import {
   BatteryLow,
   Frown,
@@ -157,11 +163,13 @@ function Road({
   to,
   weight = 1,
   color,
+  mars = false,
 }: {
   from: [number, number];
   to: [number, number];
   weight?: number;
   color?: string;
+  mars?: boolean;
 }) {
   const dx = to[0] - from[0];
   const dz = to[1] - from[1];
@@ -174,7 +182,16 @@ function Road({
       <Box
         position={[0, 0, 0]}
         scale={[length, 0.1, 1.25 - weight * 0.08]}
-        color={color ?? (weight === 3 ? "#e8dec9" : "#f7eedc")}
+        color={
+          color ??
+          (mars
+            ? weight === 3
+              ? "#9b7867"
+              : "#c39176"
+            : weight === 3
+              ? "#e8dec9"
+              : "#f7eedc")
+        }
       />
     </group>
   );
@@ -463,6 +480,8 @@ function Walker({
   z,
   selected,
   onSelect,
+  spacesuit = false,
+  lowGravity = false,
 }: {
   person: Person;
   color: string;
@@ -470,6 +489,8 @@ function Walker({
   z: number;
   selected: boolean;
   onSelect: () => void;
+  spacesuit?: boolean;
+  lowGravity?: boolean;
 }) {
   // Show one dominant state. Chatting is an explicit visible activity; other
   // ordinary actions such as walking, waiting and resting stay unbadged.
@@ -488,23 +509,74 @@ function Walker({
                 ? { Icon: Smile, label: "Happy", tone: "positive" }
                 : null;
   const StateIcon = state?.Icon;
+  const group = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (group.current)
+      group.current.position.y = lowGravity
+        ? 0.3 + Math.sin(clock.elapsedTime * 1.8 + x * 0.18 + z * 0.13) * 0.28
+        : 0;
+  });
   return (
     <group
+      ref={group}
       position={[x, 0, z]}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
       }}
     >
-      <mesh castShadow position={[0, 0.5, 0]}>
-        <cylinderGeometry args={[0.2, 0.27, 0.7, 6]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      <mesh castShadow position={[0, 1.04, 0]}>
-        <icosahedronGeometry args={[0.23, 1]} />
-        <meshStandardMaterial color="#edc9a7" />
-      </mesh>
-      <Box position={[0, 0.1, 0]} scale={[0.28, 0.3, 0.28]} color="#425568" />
+      {spacesuit ? (
+        <>
+          <mesh castShadow position={[0, 0.55, 0]}>
+            <cylinderGeometry args={[0.27, 0.32, 0.82, 10]} />
+            <meshStandardMaterial color="#e8edf0" roughness={0.55} />
+          </mesh>
+          <mesh castShadow position={[0, 1.15, 0]}>
+            <sphereGeometry args={[0.31, 16, 12]} />
+            <meshStandardMaterial
+              color="#b8e1ea"
+              metalness={0.35}
+              roughness={0.2}
+            />
+          </mesh>
+          <Box
+            position={[0, 0.58, -0.24]}
+            scale={[0.38, 0.52, 0.18]}
+            color="#6d8496"
+          />
+          <Box
+            position={[0, 0.64, 0.3]}
+            scale={[0.34, 0.32, 0.12]}
+            color={color}
+          />
+          <Box
+            position={[-0.16, 0.12, 0]}
+            scale={[0.12, 0.34, 0.14]}
+            color="#c7d0d7"
+          />
+          <Box
+            position={[0.16, 0.12, 0]}
+            scale={[0.12, 0.34, 0.14]}
+            color="#c7d0d7"
+          />
+        </>
+      ) : (
+        <>
+          <mesh castShadow position={[0, 0.5, 0]}>
+            <cylinderGeometry args={[0.2, 0.27, 0.7, 6]} />
+            <meshStandardMaterial color={color} />
+          </mesh>
+          <mesh castShadow position={[0, 1.04, 0]}>
+            <icosahedronGeometry args={[0.23, 1]} />
+            <meshStandardMaterial color="#edc9a7" />
+          </mesh>
+          <Box
+            position={[0, 0.1, 0]}
+            scale={[0.28, 0.3, 0.28]}
+            color="#425568"
+          />
+        </>
+      )}
       {state && StateIcon && (
         <Html
           position={[0, 1.72, 0]}
@@ -529,6 +601,152 @@ function Walker({
           </mesh>
           <Html position={[0, 2.35, 0]} center zIndexRange={[30, 0]}>
             <span className="person-label">{person.displayName}</span>
+          </Html>
+        </>
+      )}
+    </group>
+  );
+}
+function MarsScenery({
+  center,
+  width,
+  depth,
+}: {
+  center: [number, number];
+  width: number;
+  depth: number;
+}) {
+  const rocks = useMemo(
+    () =>
+      Array.from({ length: 18 }, (_, index) => ({
+        x: center[0] + (((index * 37) % 100) / 100 - 0.5) * (width - 8),
+        z: center[1] + (((index * 61) % 100) / 100 - 0.5) * (depth - 8),
+        size: 0.25 + ((index * 13) % 7) * 0.08,
+      })),
+    [center, width, depth],
+  );
+  return (
+    <>
+      <Stars radius={90} depth={45} count={1800} factor={3} fade speed={0.2} />
+      {rocks.map((rock, index) => (
+        <mesh key={index} castShadow position={[rock.x, 0.16, rock.z]}>
+          <dodecahedronGeometry args={[rock.size, 0]} />
+          <meshStandardMaterial color="#7d5142" roughness={1} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+function SafehouseSignal({ x, z }: { x: number; z: number }) {
+  return (
+    <group position={[x, 0.08, z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[3.5, 3.75, 32]} />
+        <meshBasicMaterial color="#7ee4ee" transparent opacity={0.7} />
+      </mesh>
+      <Html position={[0, 0.35, 0]} center>
+        <span className="person-label">SAFEHOUSE</span>
+      </Html>
+    </group>
+  );
+}
+function Alien({ x, z, scale = 1 }: { x: number; z: number; scale?: number }) {
+  return (
+    <group position={[x, 0, z]} scale={[scale, scale, scale]}>
+      <mesh castShadow position={[0, 2.5, 0]}>
+        <capsuleGeometry args={[0.8, 2.8, 8, 16]} />
+        <meshStandardMaterial color="#647f58" roughness={0.7} />
+      </mesh>
+      <mesh castShadow position={[0, 4.55, 0]}>
+        <sphereGeometry args={[1.05, 16, 12]} />
+        <meshStandardMaterial color="#809a63" roughness={0.65} />
+      </mesh>
+      {[-0.48, 0.48].map((side) => (
+        <mesh key={side} position={[side, 4.7, 0.88]}>
+          <sphereGeometry args={[0.16, 10, 8]} />
+          <meshStandardMaterial
+            color="#ffdb63"
+            emissive="#d86a31"
+            emissiveIntensity={1.6}
+          />
+        </mesh>
+      ))}
+      {[-1, 1].map((side) => (
+        <mesh
+          key={side}
+          castShadow
+          position={[side * 1.15, 2.75, 0]}
+          rotation={[0, 0, side * 0.45]}
+        >
+          <capsuleGeometry args={[0.18, 1.5, 6, 10]} />
+          <meshStandardMaterial color="#708b59" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+function AlienArrival({
+  x,
+  z,
+  elapsed,
+}: {
+  x: number;
+  z: number;
+  elapsed: number;
+}) {
+  const landing = Math.min(1, Math.max(0, elapsed / 6));
+  const height = 18 - landing * 13;
+  const doorsOpen = elapsed >= 7;
+  return (
+    <group position={[x, 0, z]}>
+      <group position={[0, height, 0]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[3.4, 4.4, 0.65, 32]} />
+          <meshStandardMaterial
+            color="#48536a"
+            metalness={0.75}
+            roughness={0.25}
+          />
+        </mesh>
+        <mesh castShadow position={[0, 0.62, 0]}>
+          <sphereGeometry
+            args={[2.3, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]}
+          />
+          <meshStandardMaterial
+            color="#87b6cf"
+            metalness={0.6}
+            roughness={0.18}
+          />
+        </mesh>
+        {Array.from({ length: 10 }, (_, index) => {
+          const angle = (index / 10) * Math.PI * 2;
+          return (
+            <mesh
+              key={index}
+              position={[Math.cos(angle) * 3.7, 0, Math.sin(angle) * 3.7]}
+            >
+              <sphereGeometry args={[0.12, 8, 6]} />
+              <meshStandardMaterial
+                color="#e6c45e"
+                emissive="#f4953f"
+                emissiveIntensity={1.4}
+              />
+            </mesh>
+          );
+        })}
+      </group>
+      {landing > 0.65 && (
+        <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[7, 32]} />
+          <meshBasicMaterial color="#4d9b9c" transparent opacity={0.18} />
+        </mesh>
+      )}
+      {doorsOpen && (
+        <>
+          <Alien x={-2.7} z={1.4} scale={1.18} />
+          <Alien x={2.8} z={-0.9} scale={1.35} />
+          <Html position={[0, 7.2, 0]} center>
+            <span className="person-label danger">UNIDENTIFIED LIFEFORMS</span>
           </Html>
         </>
       )}
@@ -619,6 +837,7 @@ export default function World({
     [environment],
   );
   const palette = useMemo(() => scenePalette(context), [context]);
+  const isMars = environment.demo?.kind === "mars";
   const daylight = daylightBackgroundForProgress(
     run ? run.time / Math.max(1, run.duration) : 0.2,
   );
@@ -690,18 +909,22 @@ export default function World({
           dpr={[1, 1.5]}
           gl={{ antialias: true, alpha: true }}
           style={{
-            backgroundColor: daylight.bottom,
-            backgroundImage: `linear-gradient(180deg, ${daylight.top}, ${daylight.bottom})`,
+            backgroundColor: isMars ? "#050711" : daylight.bottom,
+            backgroundImage: isMars
+              ? "radial-gradient(circle at 50% 15%, #17233d, #050711 72%)"
+              : `linear-gradient(180deg, ${daylight.top}, ${daylight.bottom})`,
           }}
           aria-label="Interactive 3D environment"
           onPointerMissed={() => onSelect("")}
         >
           <ambientLight
-            intensity={context.setting === "interior" ? 1.7 : 1.2}
+            intensity={
+              isMars ? 0.65 : context.setting === "interior" ? 1.7 : 1.2
+            }
           />
           <directionalLight
             position={[15, 30, 10]}
-            intensity={context.setting === "interior" ? 1.2 : 2.2}
+            intensity={isMars ? 1.25 : 2.5}
             castShadow
             shadow-mapSize={[1024, 1024]}
             shadow-camera-left={-38}
@@ -729,13 +952,20 @@ export default function World({
           <Box
             position={[scene.center[0], -0.65, scene.center[1]]}
             scale={[scene.width, 1.1, scene.depth]}
-            color={palette.ground}
+            color={isMars ? "#5d3e36" : palette.ground}
           />
           <SettingBackdrop
             scene={scene}
             context={context}
             seed={environment.seed}
           />
+          {isMars && (
+            <MarsScenery
+              center={scene.center}
+              width={scene.width}
+              depth={scene.depth}
+            />
+          )}
           {run && heatMode !== "off" && (
             <HeatLayer environment={environment} run={run} mode={heatMode} />
           )}
@@ -757,6 +987,7 @@ export default function World({
                   to={[point.x, point.z]}
                   weight={connection.weight}
                   color={palette.paving}
+                  mars={isMars}
                 />
               ));
           })}
@@ -767,6 +998,7 @@ export default function World({
               scene.nearestExitPlace.entry.x,
               scene.nearestExitPlace.entry.z,
             ]}
+            mars={isMars}
           />
           {environment.places.map((place) => (
             <group key={place.id}>
@@ -785,6 +1017,29 @@ export default function World({
               />
             </group>
           ))}
+          {!isMars &&
+            [0.12, 0.32, 0.52, 0.72, 0.9].flatMap((ratio) => [
+              <Tree
+                key={`north-${ratio}`}
+                x={scene.minX + scene.width * ratio}
+                z={scene.minZ + 2}
+              />,
+              <Tree
+                key={`south-${ratio}`}
+                x={scene.minX + scene.width * ratio}
+                z={scene.maxZ - 2}
+              />,
+            ])}
+          {isMars &&
+            environment.demo?.safePlaceId &&
+            (() => {
+              const bunker = environment.places.find(
+                (place) => place.id === environment.demo?.safePlaceId,
+              );
+              return bunker ? (
+                <SafehouseSignal x={bunker.position.x} z={bunker.position.z} />
+              ) : null;
+            })()}
           {people
             .filter((p) => p.presence === "inside")
             .map((p, i) => {
@@ -823,6 +1078,8 @@ export default function World({
                   z={z}
                   selected={selected === p.id}
                   onSelect={() => onSelect(p.id)}
+                  spacesuit={isMars}
+                  lowGravity={isMars}
                 />
               );
             })}
@@ -831,6 +1088,13 @@ export default function World({
             .map((e) =>
               e.visual === "dinosaur" ? (
                 <Dinosaur key={e.id} x={e.position.x} z={e.position.z} />
+              ) : e.visual === "ufo" ? (
+                <AlienArrival
+                  key={e.id}
+                  x={e.position.x}
+                  z={e.position.z}
+                  elapsed={Math.max(0, (run?.time ?? 0) - e.startTimeSeconds)}
+                />
               ) : (
                 <mesh
                   key={e.id}
