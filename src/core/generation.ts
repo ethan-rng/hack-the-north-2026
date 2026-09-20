@@ -57,20 +57,23 @@ export const generatedSchema = z.object({
         address: z.string().max(120).optional(),
         parkingSpots: z.number().int().min(0).max(9999).optional(),
         amenities: z.array(z.string().max(40)).max(8).optional(),
+        styleId: z.string().max(40).optional(),
+        competitorOf: z.string().max(40).optional(),
       }),
     )
     .min(6)
-    .max(12),
+    .max(24),
   connections: z
     .array(
       z.object({
-        fromPlace: z.number().int().min(1).max(12),
-        toPlace: z.number().int().min(1).max(12),
+        fromPlace: z.number().int().min(1).max(24),
+        toPlace: z.number().int().min(1).max(24),
         weight: z.number().int().min(1).max(3),
       }),
     )
     .min(5)
-    .max(30),
+    .max(60),
+  populationSize: z.number().int().min(20).max(160).optional(),
 });
 export type Generated = z.infer<typeof generatedSchema>;
 export const eventSchema = z.object({
@@ -356,6 +359,7 @@ export function compileEnvironment(
       details.parkingSpots = input.parkingSpots;
     if (input.amenities && input.amenities.length)
       details.amenities = input.amenities;
+    if (input.competitorOf) details.competitorOf = input.competitorOf;
     env.places.push({
       id,
       name: input.name,
@@ -371,6 +375,7 @@ export function compileEnvironment(
     env.presentation[id] = {
       color: colors[index % colors.length],
       asset: input.asset,
+      ...(input.styleId ? { styleId: input.styleId } : {}),
     };
     input.products.forEach((product, i) =>
       env.products.push({
@@ -461,7 +466,16 @@ export function compileEnvironment(
   );
   const hasFood = env.products.some((p) => p.category === "food");
   const goalRng = random(seed ^ 0x6a09e667);
-  env.population = names.map((name, i) => {
+  const desiredPopulation = Math.min(
+    160,
+    Math.max(20, data.populationSize ?? 40),
+  );
+  const roster = Array.from({ length: desiredPopulation }, (_, i) => {
+    const base = names[i % names.length];
+    const cycle = Math.floor(i / names.length);
+    return cycle === 0 ? base : `${base} ${cycle + 1}`;
+  });
+  env.population = roster.map((name, i) => {
     const taskCount = 2 + Math.floor(goalRng() * 4);
     const candidates: Goal[] = Array.from(
       { length: Math.min(3, env.places.length) },
