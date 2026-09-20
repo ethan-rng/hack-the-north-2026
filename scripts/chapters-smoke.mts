@@ -171,12 +171,9 @@ try {
   ).toHaveCount(0);
   await expect(page.locator(".timeline-chapter-track")).toHaveCount(0);
   await expect(page.locator(".place-label")).toHaveCount(0);
-  const visiblePeople = Number(
-    await page
-      .locator(".world-metrics .metric", { hasText: "People inside" })
-      .locator("strong")
-      .innerText(),
-  );
+  const visiblePeople = run.people.filter(
+    (person) => person.presence === "inside",
+  ).length;
   const stateIcons = page.locator(".person-state-icons");
   assert.ok((await stateIcons.count()) < visiblePeople);
   assert.ok((await stateIcons.count()) > 0);

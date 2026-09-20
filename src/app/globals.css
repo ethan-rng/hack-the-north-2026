@@ -457,6 +457,171 @@ label {
   z-index: 200;
   padding: 40px 30px;
 }
+.impact-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(21, 31, 27, 0.48);
+  backdrop-filter: blur(4px);
+  animation: impact-fade 180ms ease-out;
+}
+.impact-brief {
+  width: min(680px, 100%);
+  max-height: min(760px, calc(100dvh - 56px));
+  overflow: auto;
+  margin: 0;
+  padding: 26px;
+  border: 1px solid #d3ddca;
+  border-radius: 16px;
+  background: #fffef9;
+  box-shadow: 0 26px 90px rgba(16, 30, 23, 0.32);
+  animation: impact-rise 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.impact-brief > header,
+.impact-brief > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.impact-brief > header .eyebrow {
+  margin: 0;
+  color: #758c67;
+}
+.impact-brief > header button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #dce3d4;
+  border-radius: 50%;
+  color: #71806d;
+}
+.impact-brief > header button:hover {
+  background: #f1f5eb;
+}
+.impact-brief h2 {
+  max-width: 580px;
+  margin: 24px 0 10px;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.04;
+  letter-spacing: -1.7px;
+}
+.impact-summary {
+  max-width: 560px;
+  margin-bottom: 22px;
+  color: #617067;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.impact-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid #dce4d5;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f6f8f1;
+}
+.impact-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px 12px;
+  border-right: 1px solid #dce4d5;
+}
+.impact-metric:last-child {
+  border-right: 0;
+}
+.impact-metric > span {
+  color: #7d8b7b;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.impact-metric strong {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+}
+.impact-metric strong i {
+  color: #93a18e;
+  font-style: normal;
+}
+.impact-metric small {
+  color: #7e8c7b;
+  font-size: 10px;
+}
+.impact-metric.up small {
+  color: #5f8158;
+}
+.impact-metric.down small {
+  color: #ab6554;
+}
+.impact-detail-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 24px;
+  margin-top: 20px;
+}
+.impact-detail-grid section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.impact-detail-grid h3 {
+  margin-bottom: 9px;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #64785e;
+}
+.impact-detail-grid ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.impact-detail-grid li {
+  position: relative;
+  padding-left: 14px;
+  color: #41534c;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.impact-detail-grid li::before {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #8aa076;
+  content: "";
+}
+.impact-stories b {
+  color: var(--ink);
+}
+.impact-brief > footer {
+  margin-top: 25px;
+  padding-top: 16px;
+  border-top: 1px solid #e3e8dc;
+}
+.impact-brief > footer .text-button {
+  color: #687b6d;
+}
+@keyframes impact-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes impact-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .grid-panel {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -1888,6 +2053,39 @@ label {
   }
 }
 @media (max-width: 850px) {
+  .impact-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+  .impact-brief {
+    max-height: calc(100dvh - 24px);
+    padding: 20px;
+    border-radius: 14px;
+  }
+  .impact-brief h2 {
+    margin-top: 18px;
+    font-size: 30px;
+  }
+  .impact-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+  .impact-metric:nth-child(2) {
+    border-right: 0;
+  }
+  .impact-metric:nth-child(-n + 2) {
+    border-bottom: 1px solid #dce4d5;
+  }
+  .impact-detail-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .impact-brief > footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  .impact-brief > footer .primary {
+    width: 100%;
+  }
   .world-metrics {
     bottom: 40px;
   }

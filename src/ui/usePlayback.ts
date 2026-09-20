@@ -143,6 +143,7 @@ export function usePlayback(snapshot?: SessionSnapshot) {
     start,
     end,
     hasFrames: frames.length > 1,
+    recordings,
     loadedSegmentIds: Object.values(recordings)
       .filter((recording) => recording.runId === runId)
       .map((recording) => recording.segmentId),
@@ -151,6 +152,13 @@ export function usePlayback(snapshot?: SessionSnapshot) {
     onSubmitted: (id: string) => {
       setPlaying(false);
       setRequested(id);
+    },
+    playSegment: (id: string) => {
+      const recording = recordings[id];
+      if (!recording) return;
+      position.current = recording.frames[0]?.time ?? start;
+      setCursor(position.current);
+      setPlaying(true);
     },
     toggle: () => {
       if (!frames.length) return;

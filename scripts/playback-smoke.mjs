@@ -40,6 +40,15 @@ async function submitEvent(description) {
   await paletteInput.fill(description);
   await paletteInput.press("Enter");
 }
+async function watchImpact() {
+  const brief = page.locator(".impact-brief");
+  await brief.waitFor({ timeout: 30000 });
+  assert.ok((await brief.locator("h2").innerText()).trim().length > 0);
+  await brief
+    .getByRole("button", { name: "Watch crowd response", exact: true })
+    .click();
+  await brief.waitFor({ state: "detached" });
+}
 try {
   let releaseSession;
   const sessionGate = new Promise((resolve) => {
@@ -126,6 +135,7 @@ try {
   assert.equal(s.run.status, "paused");
   assert.ok(s.run.jevAccepted > 0);
   assert.ok(s.segments[0].callsMade <= 240);
+  await watchImpact();
   console.log(
     JSON.stringify({
       stage: "recorded",
@@ -187,6 +197,7 @@ try {
   );
   assert.equal(s.segments[1].status, "ready", s.segments[1].message);
   assert.equal(s.run.time, 60);
+  await watchImpact();
   await page
     .getByRole("button", { name: "Pause playback", exact: true })
     .waitFor();

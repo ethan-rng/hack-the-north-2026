@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { usePlayback } from "@/ui/usePlayback";
 import Timeline from "@/ui/Timeline";
+import { buildEventImpact, type EventImpact } from "@/ui/eventImpact";
 import { settlePopulation } from "@/core/playback";
 import {
   useEffect,
@@ -37,6 +38,7 @@ import type {
   Place,
   Result,
   Run,
+  Segment,
   SessionSnapshot,
 } from "@/core/types";
 import {
@@ -762,6 +764,81 @@ function EventCard({ event }: { event: Event }) {
     </details>
   );
 }
+function EventImpactBrief({
+  impact,
+  segment,
+  onClose,
+  onWatch,
+}: {
+  impact: EventImpact;
+  segment: Segment;
+  onClose: () => void;
+  onWatch: () => void;
+}) {
+  return (
+    <div className="impact-backdrop" onClick={onClose}>
+      <section
+        className="impact-brief"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="impact-headline"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header>
+          <span className="eyebrow">
+            <Sparkles size={14} /> EVENT IMPACT · {segment.duration} SECONDS
+          </span>
+          <button type="button" onClick={onClose} aria-label="Close impact brief">
+            <X size={18} />
+          </button>
+        </header>
+        <h2 id="impact-headline">{impact.headline}</h2>
+        <p className="impact-summary">{impact.summary}</p>
+        <div className="impact-metrics" aria-label="Before and after metrics">
+          {impact.metrics.map((metric) => (
+            <div key={metric.label} className={`impact-metric ${metric.direction}`}>
+              <span>{metric.label}</span>
+              <strong>
+                {metric.before} <i>→</i> {metric.after}
+              </strong>
+              <small>{metric.delta}</small>
+            </div>
+          ))}
+        </div>
+        <div className="impact-detail-grid">
+          <section>
+            <h3>The crowd response</h3>
+            <ul>
+              {impact.consequences.slice(0, 4).map((consequence) => (
+                <li key={consequence}>{consequence}</li>
+              ))}
+            </ul>
+          </section>
+          {impact.stories.length > 0 && (
+            <section>
+              <h3>People to watch</h3>
+              <ul className="impact-stories">
+                {impact.stories.map((story) => (
+                  <li key={story.name}>
+                    <b>{story.name}</b> {story.detail}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+        <footer>
+          <button type="button" className="text-button" onClick={onClose}>
+            Review on timeline
+          </button>
+          <button type="button" className="primary" onClick={onWatch}>
+            Watch crowd response <ArrowRight size={16} />
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
 // Reserve a separate scene viewport above the controls as chapter/status rows change height.
 function observeComposer(node: HTMLDivElement | null) {
   if (!node) return;
@@ -798,6 +875,9 @@ export default function Page() {
   }>({ queued: [], purchases: [], revenue: [], services: [] });
   const [paletteQuery, setPaletteQuery] = useState("");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [impactSegmentId, setImpactSegmentId] = useState<string>();
+  const [impact, setImpact] = useState<EventImpact>();
+  const preparedImpact = useRef<string | undefined>(undefined);
   useEffect(() => {
     setPreview(
       settlePopulation(
@@ -884,6 +964,24 @@ export default function Page() {
     snapshot?.setup.status === "researching" ||
     snapshot?.setup.status === "building";
   const setupView = !env || editing || generating;
+  useEffect(() => {
+    setImpactSegmentId(undefined);
+    setImpact(undefined);
+    preparedImpact.current = undefined;
+  }, [latestRun?.runId]);
+  useEffect(() => {
+    if (!impactSegmentId || !env || preparedImpact.current === impactSegmentId)
+      return;
+    const segment = snapshot?.segments.find((item) => item.id === impactSegmentId);
+    const recording = playback.recordings[impactSegmentId];
+    if (segment?.status !== "ready" || !recording) return;
+    const nextImpact = buildEventImpact(env, segment, recording);
+    if (!nextImpact) return;
+    preparedImpact.current = impactSegmentId;
+    playback.seek(segment.startTime);
+    setHeatMode("traffic");
+    setImpact(nextImpact);
+  }, [env, impactSegmentId, playback.recordings, snapshot?.segments]);
   const select = (id: string) => {
     setSelected(id);
     setPanel("entity");
@@ -919,6 +1017,9 @@ export default function Page() {
       expectedTime: latestRun!.time,
     });
     if (segment) {
+      setImpact(undefined);
+      preparedImpact.current = undefined;
+      setImpactSegmentId(segment.id);
       playback.onSubmitted(segment.id);
       setPanel("events");
     }
@@ -1682,6 +1783,17 @@ export default function Page() {
       )}
       {shortcutsOpen && (
         <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />
+      )}
+      {impact && (
+        <EventImpactBrief
+          impact={impact}
+          segment={snapshot!.segments.find((item) => item.id === impact.segmentId)!}
+          onClose={() => setImpact(undefined)}
+          onWatch={() => {
+            playback.playSegment(impact.segmentId);
+            setImpact(undefined);
+          }}
+        />
       )}
     </main>
   );
