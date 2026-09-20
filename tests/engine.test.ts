@@ -16,7 +16,7 @@ import {
   compileEnvironment,
   fallbackConfiguration,
 } from "../src/core/generation";
-import { extractSources } from "../cloudflare/ai";
+import { extractClaudeSources, extractSources } from "../cloudflare/ai";
 import type {
   Effect,
   Environment,
@@ -535,5 +535,38 @@ describe("perception, inference and baseline boundaries", () => {
     expect(sources).toHaveLength(1);
     expect(sources[0].url).toBe("https://example.com/venue");
     expect(sources[0].retrievedAt).toBeTruthy();
+  });
+  it("preserves only Claude web-search results and citations as fallback sources", () => {
+    const sources = extractClaudeSources({
+      content: [
+        {
+          type: "text",
+          citations: [
+            {
+              type: "web_search_result_location",
+              url: "https://official.example/directory",
+              title: "Official directory",
+              cited_text: "Current tenants and services.",
+            },
+          ],
+        },
+        {
+          type: "web_search_tool_result",
+          content: [
+            {
+              type: "web_search_result",
+              url: "https://official.example/map",
+              title: "Venue map",
+            },
+          ],
+        },
+      ],
+    });
+    expect(sources).toHaveLength(2);
+    expect(sources[0]).toMatchObject({
+      url: "https://official.example/directory",
+      excerpt: "Current tenants and services.",
+    });
+    expect(sources[1].url).toBe("https://official.example/map");
   });
 });

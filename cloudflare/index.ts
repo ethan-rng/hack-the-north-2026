@@ -422,9 +422,9 @@ export default {
       if (url.pathname === "/api/health")
         return json({
           status: "ok",
-          research: "Baseten + Exa",
+          research: "Baseten + Exa, with Claude web-search fallback",
           decisions: "Cloudflare Workers AI / typesafe/jev",
-          configured: !!env.BASETEN_API_KEY,
+          configured: !!env.BASETEN_API_KEY || !!env.ANTHROPIC_API_KEY,
         });
       let session = request.headers
         .get("Cookie")
