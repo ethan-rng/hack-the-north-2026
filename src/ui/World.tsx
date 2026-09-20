@@ -1,8 +1,7 @@
 "use client";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, OrthographicCamera } from "@react-three/drei";
-import { Component, useRef, type ReactNode } from "react";
-import type { Group } from "three";
+import { Component, type ReactNode } from "react";
 import type { Environment, Person, Place, Run } from "@/core/types";
 import { placeOpen } from "@/core/engine";
 
@@ -186,19 +185,9 @@ function Walker({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const group = useRef<Group>(null);
-  const initialPosition = useRef<[number, number, number]>([x, 0, z]);
-  useFrame((_, dt) => {
-    const g = group.current;
-    if (!g) return;
-    const blend = 1 - Math.exp(-dt * 8);
-    g.position.x += (x - g.position.x) * blend;
-    g.position.z += (z - g.position.z) * blend;
-  });
   return (
     <group
-      ref={group}
-      position={initialPosition.current}
+      position={[x, 0, z]}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -279,7 +268,7 @@ class RenderBoundary extends Component<
     return this.state.failed ? (
       <div className="scene-fallback">
         <h2>3D rendering is unavailable</h2>
-        <p>The simulation and inspectors are still running.</p>
+        <p>The recorded state and inspectors are still available.</p>
         {this.props.environment.places.map((p) => (
           <button key={p.id} onClick={() => this.props.onSelect(p.id)}>
             {p.name}

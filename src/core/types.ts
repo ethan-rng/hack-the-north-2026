@@ -158,7 +158,7 @@ export interface Person {
     at: number;
     inputRevision: number;
     runId: string;
-    context: Record<string, unknown>;
+    context?: Record<string, unknown>;
   };
   decisionError?: string;
 }
@@ -186,8 +186,6 @@ export interface Event {
   status: "interpreting" | "active" | "completed" | "unsupported" | "failed";
   startTimeSeconds: number;
   durationSeconds: number;
-  awareness: "announcement" | "local";
-  radius: number;
   position: Point;
   effects: Effect[];
   approximationNotes: string[];
@@ -252,7 +250,7 @@ export interface DecisionRecord {
 export interface Run {
   runId: string;
   baselineId: string;
-  status: "running" | "finished";
+  status: "running" | "paused" | "finished";
   time: number;
   revision: number;
   duration: number;
@@ -289,4 +287,40 @@ export interface SessionSnapshot {
   environment?: Environment;
   run?: Run;
   results: Result[];
+  segments: Segment[];
+}
+
+export interface Segment {
+  id: string;
+  runId: string;
+  eventId: string;
+  originalText: string;
+  status: "interpreting" | "processing" | "ready" | "failed";
+  startTime: number;
+  endTime: number;
+  ticksDone: number;
+  duration: number;
+  callsMade: number;
+  callLimit: number;
+  startedAt: number;
+  message: string;
+}
+export type ReplayFrame = Pick<
+  Run,
+  | "runId"
+  | "time"
+  | "revision"
+  | "people"
+  | "products"
+  | "services"
+  | "metrics"
+  | "unassignedGoalCompletions"
+  | "events"
+  | "jevAccepted"
+  | "jevFailed"
+>;
+export interface Recording {
+  segmentId: string;
+  runId: string;
+  frames: ReplayFrame[];
 }

@@ -276,6 +276,7 @@ export function createTicket(
   run: Run,
   p: Person,
 ): DecisionTicket | null {
+  if (run.status !== "running") return null;
   if (p.pending && Date.now() - p.pending.issuedAt < 25_000) return null;
   if (p.nextDecisionAt > run.time || p.presence === "exited") return null;
   const choices = choicesFor(env, run, p);
@@ -531,11 +532,8 @@ function perceiveEvents(env: Environment, run: Run) {
     for (const p of run.people) {
       if (p.presence === "exited" || p.knownEventIds.includes(event.id))
         continue;
-      if (
-        event.awareness !== "announcement" &&
-        distance(p.position, event.position) > event.radius
-      )
-        continue;
+      // Every event reaches everyone still in the scenario, regardless of position.
+      // Legacy stored awareness/radius fields are intentionally ignored.
       p.knownEventIds.push(event.id);
       remember(p, `Learned: ${event.title}`);
       let relevant = false;

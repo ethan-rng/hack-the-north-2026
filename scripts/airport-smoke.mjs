@@ -37,20 +37,61 @@ try {
     }),
   );
   await client.post("/api/start");
-  const before = await waitFor((s) => s.run?.time >= 10, 25);
+  const before = await state();
+  if (
+    before.run.time !== 0 ||
+    before.run.status !== "paused" ||
+    before.run.jevAccepted !== 0
+  )
+    throw Error("Airport did not open frozen");
   const gates = env.places.filter((p) =>
     /\bgate\b/i.test([p.name, p.typeLabel, ...p.tags].join(" ")),
   );
   if (gates.length < 2) throw Error("Need two generated gate zones");
   const response = await client.post("/api/events", {
     data: {
-      text: `Announce to the whole terminal: journey CC101 now departs from ${gates[1].name}. The new departure deadline is 120 seconds from now.`,
+      text: `A sign at ${gates[0].name} says journey CC101 now departs from ${gates[1].name}. The new departure deadline is 120 seconds from now.`,
     },
   });
   if (!response.ok()) throw Error(await response.text());
   let s = await waitFor(
-    (s) => s.run?.events[0] && s.run.events[0].status !== "interpreting",
-    25,
+    (s) => ["ready", "failed"].includes(s.segments[0]?.status),
+    190,
+  );
+  if (s.segments[0].status !== "ready") throw Error(s.segments[0].message);
+  if (s.run.time !== 30 || s.run.status !== "paused")
+    throw Error("Segment did not pause at 30 seconds");
+  const event = s.run.events[0];
+  const recording = await (
+    await client.get(`/api/recording?segmentId=${s.segments[0].id}`)
+  ).json();
+  const initial = recording.frames[0];
+  if (initial.time !== 0) throw Error("Missing initial event frame");
+  const present = initial.people.filter((p) => p.presence !== "exited");
+  if (!present.every((p) => p.knownEventIds.includes(event.id)))
+    throw Error("Event did not reach everyone immediately");
+  if ("awareness" in event || "radius" in event)
+    throw Error("Event still carries a configurable awareness or radius");
+  const goalChange = event.effects.find((e) => e.kind === "goal_update");
+  if (!goalChange) throw Error("No goal update");
+  for (const p of present) {
+    const previous = before.run.people.find((person) => person.id === p.id);
+    for (const goal of p.goals) {
+      const oldGoal = previous.goals.find((g) => g.id === goal.id);
+      const expected =
+        oldGoal.status === "pending" &&
+        oldGoal.subjectKey === goalChange.subjectKey
+          ? goalChange.targetId
+          : oldGoal.targetId;
+      if (goal.targetId !== expected)
+        throw Error("Incorrect targeted goal update");
+    }
+  }
+  console.log(
+    JSON.stringify({
+      stage: "global-awareness",
+      immediatelyAware: present.length,
+    }),
   );
   console.log(
     JSON.stringify({
@@ -68,7 +109,13 @@ try {
   );
   if (!s.run.events[0].effects.some((e) => e.kind === "goal_update"))
     throw Error("No goal update");
-  s = await waitFor((s) => s.run?.time >= 75, 90);
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  const idle = await state();
+  if (
+    idle.run.time !== s.run.time ||
+    idle.run.jevAccepted !== s.run.jevAccepted
+  )
+    throw Error("Idle airport kept running");
   const completed = env.services
     .filter((s) => s.kind === "timed")
     .reduce(
@@ -77,7 +124,7 @@ try {
     );
   console.log(
     JSON.stringify({
-      stage: "airport-live",
+      stage: "airport-recorded",
       time: s.run.time,
       decisions: s.run.jevAccepted,
       failures: s.run.jevFailed,

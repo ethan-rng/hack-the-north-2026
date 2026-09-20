@@ -57,8 +57,6 @@ function addEvent(
     status: "interpreting",
     startTimeSeconds: run.time,
     durationSeconds: 30,
-    awareness: "announcement",
-    radius: 5,
     position: { x: 0, z: 0 },
     effects,
     approximationNotes: [],
@@ -224,7 +222,53 @@ describe("authoritative simulation mechanics", () => {
   });
 });
 describe("perception, inference and baseline boundaries", () => {
-  it("keeps local gate changes unknown to distant passengers and unrelated people", () => {
+  it.each(["announcement", "attraction", "threat", "discount"] as const)(
+    "delivers a distant %s event to everyone and includes it in Jev context",
+    (kind) => {
+      const { env, run } = fixture();
+      const exited = run.people.at(-1)!;
+      exited.presence = "exited";
+      const event = addEvent(
+        env,
+        run,
+        [effect(kind, kind === "discount" ? run.products[0].id : null, 1)],
+        { position: { x: 1000, z: 1000 } },
+      );
+      for (const p of run.people.filter((p) => p !== exited)) {
+        expect(p.knownEventIds).toContain(event.id);
+        const ticket = createTicket(env, run, p)!;
+        expect(ticket.context).toMatchObject({
+          perceivedEvents: [expect.objectContaining({ title: event.title })],
+        });
+        if (kind === "threat")
+          expect(ticket.choices.some((choice) => choice.id === "flee")).toBe(
+            true,
+          );
+      }
+      expect(exited.knownEventIds).not.toContain(event.id);
+      tick(env, run);
+      expect(
+        run.people[0].knownEventIds.filter((id) => id === event.id),
+      ).toHaveLength(1);
+    },
+  );
+  it("ignores legacy local visibility fields when resuming stored active events", () => {
+    const { env, run } = fixture();
+    const event = addEvent(env, run, [effect("threat", null, 1)]);
+    const p = run.people[0];
+    p.knownEventIds = [];
+    Object.assign(event, {
+      awareness: "local",
+      radius: 1,
+      position: { x: 1000, z: 1000 },
+    });
+    tick(env, run);
+    expect(p.knownEventIds).toContain(event.id);
+    expect(choicesFor(env, run, p).some((choice) => choice.id === "flee")).toBe(
+      true,
+    );
+  });
+  it("broadcasts gate changes globally while updating only matching passenger goals", () => {
     const { env, run } = fixture();
     const [near, far, unrelated] = run.people;
     near.position = { x: 0, z: 0 };
@@ -242,18 +286,14 @@ describe("perception, inference and baseline boundaries", () => {
           status: "pending",
         },
       ];
-    const event = addEvent(
-      env,
-      run,
-      [effect("goal_update", env.places[1].id, 60, "CC101")],
-      { awareness: "local", radius: 3 },
-    );
+    const unrelatedGoals = structuredClone(unrelated.goals);
+    const event = addEvent(env, run, [
+      effect("goal_update", env.places[1].id, 60, "CC101"),
+    ]);
     expect(near.goals[0].targetId).toBe(env.places[1].id);
-    expect(far.goals[0].targetId).toBe(env.places[0].id);
-    expect(far.knownEventIds).not.toContain(event.id);
+    for (const p of run.people) expect(p.knownEventIds).toContain(event.id);
     expect(unrelated.knownFacts).toHaveLength(0);
-    far.position = { x: 0, z: 0 };
-    tick(env, run);
+    expect(unrelated.goals).toEqual(unrelatedGoals);
     expect(far.goals[0].targetId).toBe(env.places[1].id);
     expect(far.goals[0].deadlineSeconds).toBe(near.goals[0].deadlineSeconds);
   });
@@ -283,7 +323,6 @@ describe("perception, inference and baseline boundaries", () => {
     p.nextDecisionAt = 0;
     const late = createTicket(env, run, p)!;
     addEvent(env, run, [effect("availability", env.places[1].id, 0)], {
-      awareness: "local",
       position: { x: 100, z: 100 },
     });
     expect(applyDecision(env, run, late, `move:${env.places[1].id}`)).toBe(
