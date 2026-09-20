@@ -32,6 +32,14 @@ async function frozen(expected, ms = 2500) {
   assert.equal(after.run.jevFailed, expected.run.jevFailed);
   assert.deepEqual(after.run.people, expected.run.people);
 }
+async function submitEvent(description) {
+  await page.getByTitle("Command palette (⌘K)").click();
+  const paletteInput = page.getByPlaceholder(
+    "Type a command or describe an event…",
+  );
+  await paletteInput.fill(description);
+  await paletteInput.press("Enter");
+}
 try {
   let releaseSession;
   const sessionGate = new Promise((resolve) => {
@@ -92,12 +100,9 @@ try {
   assert.equal(s.run.time, 0);
   await frozen(s);
   await page.screenshot({ path: "/private/tmp/crowd-playback-idle.png" });
-  await page
-    .getByLabel("Describe an event")
-    .fill("Announce mall-wide: all food is 50 percent off for 15 seconds.");
-  await page
-    .getByRole("button", { name: "Process event", exact: true })
-    .click();
+  await submitEvent(
+    "Announce mall-wide: all food is 50 percent off for 15 seconds.",
+  );
   await page.locator(".processing-overlay").waitFor();
   s = await state();
   assert.equal(s.run.time, 0);
@@ -155,8 +160,8 @@ try {
   assert.equal(
     await page
       .getByRole("button", { name: "Process event", exact: true })
-      .isDisabled(),
-    true,
+      .count(),
+    0,
   );
   await page.getByRole("button", { name: "People", exact: true }).click();
   await page.locator(".entity-scroll button").first().click();
@@ -175,12 +180,7 @@ try {
     .click();
   assert.ok(Number(await slider.inputValue()) < 2);
   await page.getByRole("button", { name: "Jump to latest state" }).click();
-  await page
-    .getByLabel("Describe an event")
-    .fill("A dinosaur enters the central plaza for 20 seconds.");
-  await page
-    .getByRole("button", { name: "Process event", exact: true })
-    .click();
+  await submitEvent("A dinosaur enters the central plaza for 20 seconds.");
   s = await waitFor(
     (s) =>
       s.segments[1]?.status === "ready" || s.segments[1]?.status === "failed",

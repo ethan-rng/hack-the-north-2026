@@ -171,6 +171,10 @@ try {
     "Scene and controls must occupy separate panes",
   );
   await expect(page.locator(".event-suggestions")).toHaveCount(0);
+  await expect(page.locator(".event-prompt")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Process event", exact: true }),
+  ).toHaveCount(0);
   await expect(page.locator(".timeline-chapter-track")).toHaveCount(0);
   await expect(page.locator(".place-label")).toHaveCount(0);
   const visiblePeople = Number(

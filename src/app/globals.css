@@ -1150,32 +1150,6 @@ label {
   padding: 10px 13px;
   z-index: 25;
 }
-.event-prompt {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-.event-prompt > svg {
-  color: #a7ad91;
-  flex-shrink: 0;
-}
-.event-prompt textarea {
-  flex: 1;
-  border: none;
-  resize: none;
-  background: none;
-  padding: 12px 0;
-  color: var(--ink);
-  font-size: 11px;
-  min-width: 0;
-}
-.event-prompt textarea::placeholder {
-  color: #9ca58e;
-}
-.event-prompt .primary {
-  padding: 11px 12px;
-  font-size: 10px;
-}
 .event-suggestions {
   display: flex;
   gap: 12px;
@@ -1595,9 +1569,6 @@ label {
     left: 183px;
     right: 315px;
   }
-  .event-prompt .primary span {
-    display: none;
-  }
   .map-help {
     left: 185px;
   }
@@ -1780,9 +1751,6 @@ label {
   }
   .event-suggestions {
     padding-left: 0;
-  }
-  .event-prompt textarea {
-    font-size: 12px;
   }
   .comparison {
     font-size: 12px;

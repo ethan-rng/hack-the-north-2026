@@ -776,7 +776,7 @@ function EventCard({ event }: { event: Event }) {
   );
 }
 // Reserve a separate scene viewport above the controls as chapter/status rows change height.
-function observeComposer(node: HTMLFormElement | null) {
+function observeComposer(node: HTMLDivElement | null) {
   if (!node) return;
   const root = node.closest("main");
   const measure = () =>
@@ -791,7 +791,6 @@ export default function Page() {
   const [snapshot, setSnapshot] = useState<SessionSnapshot>();
   const [description, setDescription] = useState("");
   const [preview, setPreview] = useState<Environment>();
-  const [text, setText] = useState("");
   const [selected, setSelected] = useState("");
   const [panel, setPanel] = useState<
     "entity" | "sources" | "compare" | "events"
@@ -817,7 +816,6 @@ export default function Page() {
   const [paletteQuery, setPaletteQuery] = useState("");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [tickerCollapsed, setTickerCollapsed] = useState(false);
-  const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     setPreview(
       settlePopulation(
@@ -944,14 +942,9 @@ export default function Page() {
     });
     if (segment) {
       playback.onSubmitted(segment.id);
-      setText("");
       setPanel("events");
     }
     return !!segment;
-  }
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    await submitText(text);
   }
   const person = run?.people.find((p) => p.id === selected),
     place = env?.places.find((p) => p.id === selected);
@@ -1055,38 +1048,40 @@ export default function Page() {
           p.displayName.toLowerCase().includes(query.toLowerCase()) ||
           p.id.toLowerCase() === query.toLowerCase(),
       );
+    const submitPaletteEvent = async (eventText: string) => {
+      if (!canSubmit)
+        return "Return to the latest running simulation before adding an event";
+      const submitted = await submitText(eventText);
+      if (!submitted) return "Could not process this event";
+      setPaletteOpen(false);
+      return null;
+    };
     if (cmd === "close") {
       const p = findPlace(rest);
       if (!p) return "No place matched";
-      setText(`Close ${p.name} for 5 minutes`);
-      setPaletteOpen(false);
-      return null;
+      return submitPaletteEvent(`Close ${p.name} for 5 minutes`);
     }
     if (cmd === "discount") {
       const m = rest.match(/^(\d+)\s+(.+)$/);
       if (!m) return "Usage: discount 20 gate-b4";
       const p = findPlace(m[2]);
       if (!p) return "No place matched";
-      setText(`Announce ${m[1]}% off at ${p.name} for 5 minutes`);
-      setPaletteOpen(false);
-      return null;
+      return submitPaletteEvent(
+        `Announce ${m[1]}% off at ${p.name} for 5 minutes`,
+      );
     }
     if (cmd === "capacity") {
       const m = rest.match(/^(\d+)\s+(.+)$/);
       if (!m) return "Usage: capacity 2 security";
       const p = findPlace(m[2]);
       if (!p) return "No place matched";
-      setText(
+      return submitPaletteEvent(
         `Set service capacity at ${p.name} to ${m[1]} slots for 5 minutes`,
       );
-      setPaletteOpen(false);
-      return null;
     }
     if (cmd === "announce") {
       if (!rest) return "Usage: announce <message>";
-      setText(`Announce: ${rest}`);
-      setPaletteOpen(false);
-      return null;
+      return submitPaletteEvent(`Announce: ${rest}`);
     }
     if (cmd === "heat") {
       const modes: HeatMode[] = [
@@ -1709,11 +1704,7 @@ export default function Page() {
                   )}
                 </div>
               </aside>
-              <form
-                ref={observeComposer}
-                className="event-composer"
-                onSubmit={submit}
-              >
+              <div ref={observeComposer} className="event-composer">
                 <Timeline
                   playback={playback}
                   segments={snapshot?.segments ?? []}
@@ -1746,46 +1737,7 @@ export default function Page() {
                       {s.message}
                     </p>
                   ))}
-                <div className="event-prompt">
-                  <Sparkles size={18} />
-                  <textarea
-                    ref={input}
-                    aria-label="Describe an event"
-                    placeholder={
-                      latestRun?.status === "finished"
-                        ? "Run complete. Reset the baseline to try another scenario."
-                        : processing
-                          ? "Processing your event…"
-                          : "Describe an event to process the next 30 seconds…"
-                    }
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (text.trim().length >= 3 && !busy && canSubmit)
-                          e.currentTarget.form?.requestSubmit();
-                      }
-                    }}
-                    rows={1}
-                    minLength={3}
-                    maxLength={1000}
-                    required
-                    disabled={!canSubmit}
-                  />
-                  <button
-                    className="primary"
-                    disabled={!!busy || !canSubmit || text.trim().length < 3}
-                  >
-                    {busy === "events" ? (
-                      <LoaderCircle className="spin" size={16} />
-                    ) : (
-                      <ArrowRight size={18} />
-                    )}
-                    <span>Process event</span>
-                  </button>
-                </div>
-              </form>
+              </div>
             </>
           )}
         </>
