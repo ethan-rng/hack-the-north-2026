@@ -5,6 +5,11 @@ import {
   fallbackConfiguration,
   generatedSchema,
 } from "../src/core/generation";
+import {
+  applyCuratedDemoEvent,
+  buildDemoEnvironment,
+  demoKindForDescription,
+} from "../src/core/demoEnvironments";
 import type {
   DecisionTicket,
   Environment,
@@ -263,6 +268,21 @@ export async function researchEnvironment(
       ? `Retrieved ${sources.length} sources. Building and validating the environment…`
       : "Research unavailable. Building a labeled assumption-based environment…",
   );
+  const demoKind = demoKindForDescription(description);
+  if (demoKind) {
+    stage(
+      demoKind === "yorkdale"
+        ? "Preparing the researched Yorkdale mall demonstration…"
+        : "Preparing the Mars base demonstration…",
+    );
+    return buildDemoEnvironment(
+      demoKind,
+      description,
+      sources,
+      researchStatus,
+      setupId,
+    );
+  }
   let generated;
   try {
     generated = (
@@ -310,6 +330,7 @@ export async function interpretEvent(
   run: Run,
   event: Event,
 ) {
+  if (applyCuratedDemoEvent(environment, run, event)) return;
   const structuredResult = await structured(
     env,
     "event",

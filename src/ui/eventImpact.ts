@@ -72,7 +72,13 @@ function actionDetail(person: Person) {
   }
 }
 
-function headline(kind: EffectKind | undefined, target: string | undefined) {
+function headline(
+  kind: EffectKind | undefined,
+  target: string | undefined,
+  visual?: "dinosaur" | "marker" | "ufo",
+) {
+  if (visual === "ufo")
+    return "ALIEN CRAFT TOUCHES DOWN — CREW RACES FOR COVER";
   switch (kind) {
     case "threat":
       return "Safety alert sends the crowd into motion";
@@ -195,12 +201,18 @@ export function buildEventImpact(
     .map(({ name, detail }) => ({ name, detail }));
 
   const targetId = event?.effects.find((effect) => effect.targetId)?.targetId;
-  const target = targetId ? places.get(targetId) : undefined;
+  const product = targetId
+    ? after.products.find((candidate) => candidate.id === targetId)
+    : undefined;
+  const target = targetId
+    ? places.get(targetId) ??
+      (product ? places.get(product.placeId) : undefined)
+    : undefined;
   const keyEffect = event?.effects[0]?.kind;
   const firstResponse = consequences.slice(0, 2).join(". ");
   return {
     segmentId: segment.id,
-    headline: headline(keyEffect, target),
+    headline: headline(keyEffect, target, event?.visual),
     summary: `${event?.title ?? segment.originalText} reached everyone. ${firstResponse}.`,
     metrics: [
       {

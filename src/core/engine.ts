@@ -327,7 +327,7 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
             .map((effect) => effect.targetId!),
         ),
     );
-    const safePlace = env.places
+    const safePlaces = env.places
       .filter(
         (place) =>
           placeOpen(run, place.id) &&
@@ -336,6 +336,16 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
           occupancy(run, place.id) < place.admissionCapacity,
       )
       .sort(
+        (a, b) =>
+          occupancy(run, a.id) / a.admissionCapacity -
+            occupancy(run, b.id) / b.admissionCapacity ||
+          a.id.localeCompare(b.id),
+      );
+    // The Mars demo designates a real bunker. It remains only an available
+    // Jev choice; individual astronauts still decide whether to take it.
+    const safePlace =
+      safePlaces.find((place) => place.id === env.demo?.safePlaceId) ??
+      safePlaces.sort(
         (a, b) =>
           occupancy(run, a.id) / a.admissionCapacity -
             occupancy(run, b.id) / b.admissionCapacity ||
@@ -964,7 +974,13 @@ export function tick(env: Environment, run: Run, seconds = 1) {
     const a = p.currentAction;
     if (!a) continue;
     if (a.path) {
-      let remaining = dt * (a.type === "flee" ? 4 : 2);
+      let remaining =
+        dt *
+        (a.type === "flee"
+          ? env.demo?.kind === "mars"
+            ? 6
+            : 4
+          : 2);
       while (a.path.length && remaining > 0) {
         const next = a.path[0],
           dist = distance(p.position, next);
