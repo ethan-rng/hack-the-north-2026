@@ -122,7 +122,13 @@ export interface Environment {
   population: Person[];
   presentation: Record<
     string,
-    { color: string; asset: string; styleId?: string }
+    {
+      color: string;
+      asset: string;
+      styleId?: string;
+      styleBrief?: string;
+      customPrimitives?: unknown[];
+    }
   >;
 }
 export type ActionType =

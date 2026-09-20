@@ -14,6 +14,7 @@ import {
   settlePopulation,
 } from "../src/core/playback";
 import type {
+  Environment,
   Event,
   Recording,
   ReplayFrame,
@@ -66,6 +67,81 @@ export class SimulationSession extends DurableObject<Bindings> {
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS frames (run_id TEXT NOT NULL, segment_id TEXT NOT NULL, time INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(run_id, segment_id, time))",
     );
+    ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS building_cache (hash TEXT PRIMARY KEY, primitives TEXT NOT NULL, generated_at INTEGER NOT NULL)",
+    );
+  }
+  private normalizeBrief(brief: string): string {
+    return brief.trim().replace(/\s+/g, " ").toLowerCase();
+  }
+  private async hashBrief(brief: string): Promise<string> {
+    const bytes = new TextEncoder().encode(this.normalizeBrief(brief));
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+  }
+  private readBuildingCache(hash: string): unknown[] | undefined {
+    const row = this.ctx.storage.sql
+      .exec<{ primitives: string }>(
+        "SELECT primitives FROM building_cache WHERE hash=?",
+        hash,
+      )
+      .toArray()[0];
+    if (!row) return undefined;
+    try {
+      return JSON.parse(row.primitives) as unknown[];
+    } catch {
+      return undefined;
+    }
+  }
+  private writeBuildingCache(hash: string, primitives: unknown[]) {
+    this.ctx.storage.sql.exec(
+      "INSERT INTO building_cache(hash,primitives,generated_at) VALUES(?,?,?) ON CONFLICT(hash) DO UPDATE SET primitives=excluded.primitives, generated_at=excluded.generated_at",
+      hash,
+      JSON.stringify(primitives),
+      Date.now(),
+    );
+  }
+  private async resolveCustomBuildings(environment: Environment) {
+    const targets: { placeId: string; brief: string }[] = [];
+    for (const [placeId, presentation] of Object.entries(
+      environment.presentation,
+    )) {
+      const brief = presentation?.styleBrief;
+      if (typeof brief === "string" && brief.length >= 8)
+        targets.push({ placeId, brief });
+    }
+    if (!targets.length) return;
+    // Cap generation to protect the setup budget. Extras stay on their fallback styleId.
+    const limit = 4;
+    const scope = targets.slice(0, limit);
+    // Content-address each brief so identical descriptions across places (or
+    // sessions inside this DO) don't pay the LLM cost twice.
+    const hashes = await Promise.all(
+      scope.map((t) => this.hashBrief(t.brief)),
+    );
+    const palette = Object.values(environment.presentation)
+      .map((p) => p?.color)
+      .filter((c): c is string => typeof c === "string")
+      .slice(0, 6);
+    const results = await Promise.all(
+      scope.map(async ({ brief }, index) => {
+        const hash = hashes[index];
+        const cached = this.readBuildingCache(hash);
+        if (cached) return cached;
+        const generated = await generateBuilding(this.env, brief, palette);
+        if (!generated) return undefined;
+        this.writeBuildingCache(hash, generated.primitives);
+        return generated.primitives as unknown[];
+      }),
+    );
+    for (let i = 0; i < scope.length; i++) {
+      const primitives = results[i];
+      if (!primitives) continue;
+      const target = environment.presentation[scope[i].placeId];
+      if (target) target.customPrimitives = primitives;
+    }
   }
   private load(): StoredSession {
     const row = this.ctx.storage.sql
@@ -160,6 +236,17 @@ export class SimulationSession extends DurableObject<Bindings> {
           this.save(state);
         },
       );
+      const stateBefore = this.load();
+      if (
+        stateBefore.setup.id !== setupId ||
+        stateBefore.setup.status === "failed"
+      )
+        return;
+      // Surface progress so a slow custom-building step doesn't look like a stall.
+      stateBefore.setup.message =
+        "Sketching custom buildings for the unusual places…";
+      this.save(stateBefore);
+      await this.resolveCustomBuildings(environment);
       const state = this.load();
       if (state.setup.id !== setupId || state.setup.status === "failed") return;
       state.environment = settlePopulation(environment);

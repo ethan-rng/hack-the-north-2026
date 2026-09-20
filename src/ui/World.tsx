@@ -15,7 +15,11 @@ import type { Environment, Person, Place, Run } from "@/core/types";
 
 const DEFAULT_ZOOM_PERCENT = 175;
 import { placeOpen, occupancy } from "@/core/engine";
-import { BuildingModel, footprintBounds } from "@/ui/buildings/primitives";
+import {
+  BuildingModel,
+  footprintBounds,
+  type Primitive,
+} from "@/ui/buildings/primitives";
 import { stylesById } from "@/ui/buildings/styles";
 import { daylightBackgroundForProgress } from "@/ui/daylight";
 
@@ -174,7 +178,12 @@ function Building({
   onSelect,
 }: {
   place: Place;
-  appearance: { color: string; asset: string; styleId?: string };
+  appearance: {
+    color: string;
+    asset: string;
+    styleId?: string;
+    customPrimitives?: unknown[];
+  };
   selected: boolean;
   closed: boolean;
   onSelect: () => void;
@@ -186,11 +195,17 @@ function Building({
       place.entry.z - place.position.z,
     );
   const style = appearance.styleId ? stylesById[appearance.styleId] : undefined;
-  const primitives = useMemo(
-    () =>
-      style?.build({ color: closed ? "#a9aaa3" : appearance.color, closed }),
-    [style, closed, appearance.color],
-  );
+  const primitives = useMemo<Primitive[] | undefined>(() => {
+    if (
+      Array.isArray(appearance.customPrimitives) &&
+      appearance.customPrimitives.length
+    )
+      return appearance.customPrimitives as Primitive[];
+    return style?.build({
+      color: closed ? "#a9aaa3" : appearance.color,
+      closed,
+    });
+  }, [appearance.customPrimitives, style, closed, appearance.color]);
   const bounds = useMemo(
     () =>
       primitives

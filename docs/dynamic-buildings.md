@@ -114,11 +114,27 @@ Return: { primitives: [...] }
 
 ## Rollout plan
 
-1. Land the Zod schema + validator, no LLM wiring yet.
-2. Add a `/dev/custom` scratch page: enter a brief, hit generate, see the
-   result rendered alongside the 105 predefined styles. Purely a designer tool.
-3. Only after (2) looks good, add `custom` sentinel + `styleBrief` to the
-   environment schema and a lazy-generation path.
+1. **Done.** Land the Zod schema + validator with tests
+   (`src/core/buildingSchema.ts`, `tests/buildingSchema.test.ts`).
+2. **Done.** `/dev/custom` scratch page for designer iteration.
+3. **Done.** `POST /api/dev/building` route that returns a validated primitive
+   array (also used by `/dev/custom`).
+4. **Done.** Extend `generatedSchema` with optional `styleBrief` (8–280 chars).
+   Prompt now instructs the LLM to prefer `styleId` and use `styleBrief` only
+   when nothing in the library fits.
+5. **Done.** Compile step preserves `styleBrief` on `env.presentation[id]`.
+   `customPrimitives` is populated by the worker, not compile.
+6. **Done.** Worker orchestration (`resolveCustomBuildings` in
+   `cloudflare/index.ts`). Iterates places with a `styleBrief`, caps at 4 per
+   environment, resolves each in parallel, caches results in a per-DO
+   `building_cache(hash, primitives, generated_at)` table content-addressed
+   by SHA-256 of the normalized brief. Failures return `undefined` so the
+   render falls back to the library `styleId`.
+7. **Done.** Render path in `src/ui/World.tsx`: `Building` prefers
+   `appearance.customPrimitives` when present, otherwise falls back to
+   `stylesById[styleId]`, otherwise the asset switch. The PlaceInspector
+   in `src/app/page.tsx` surfaces the brief as a muted line with a
+   "rendering fallback" note when generation was unavailable.
 
 ## What NOT to do
 
@@ -126,3 +142,5 @@ Return: { primitives: [...] }
   deterministic path.
 - Do not let the LLM emit JSX or component code — only the primitives array.
 - Do not run generation inside the hot decision loop.
+- Do not exceed the 4-per-environment cap without adding a shared KV cache;
+  the per-DO cache only helps within one session.

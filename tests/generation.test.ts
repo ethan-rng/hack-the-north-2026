@@ -233,6 +233,24 @@ describe("venue-aware generation", () => {
     );
   });
 
+  it("propagates styleBrief onto presentation for dynamic building generation", () => {
+    const data = configuration("mall");
+    data.places[0].styleBrief =
+      "beach cabana with striped canopy on wooden posts";
+    data.places[2].styleBrief =
+      "research reactor cooling stack with a steam vent";
+    const env = compile(data);
+    const withBrief = env.places
+      .map((p) => env.presentation[p.id].styleBrief)
+      .filter(Boolean);
+    expect(withBrief).toHaveLength(2);
+    expect(withBrief[0]).toContain("cabana");
+    // customPrimitives is populated separately by the worker; compile alone should not set it.
+    expect(
+      env.places.every((p) => !env.presentation[p.id].customPrimitives),
+    ).toBe(true);
+  });
+
   it("keeps future groups absent until their scheduled arrival and preserves them on reset", () => {
     const env = settlePopulation(compile(configuration("park")));
     const run = newScenario(env);

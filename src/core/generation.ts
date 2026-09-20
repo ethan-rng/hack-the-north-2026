@@ -103,6 +103,7 @@ export const generatedSchema = z.object({
         parkingSpots: z.number().int().min(0).max(9999).optional(),
         amenities: z.array(z.string().max(40)).max(8).optional(),
         styleId: z.enum(styleIds).optional(),
+        styleBrief: z.string().min(8).max(280).optional(),
         competitorOf: z.string().max(40).optional(),
       }),
     )
@@ -450,6 +451,7 @@ export function compileEnvironment(
       color: colors[index % colors.length],
       asset: input.asset,
       ...(chosenStyle ? { styleId: chosenStyle } : {}),
+      ...(input.styleBrief ? { styleBrief: input.styleBrief.trim() } : {}),
     };
     input.products.forEach((product, i) =>
       env.products.push({

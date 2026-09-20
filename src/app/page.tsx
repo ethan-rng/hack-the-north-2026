@@ -464,6 +464,15 @@ function PlaceInspector({
             : "Approximate position"}
         </p>
       )}
+      {env?.presentation?.[p.id]?.styleBrief && (
+        <p className="muted">
+          Custom low-poly:{" "}
+          <em>{env.presentation[p.id].styleBrief}</em>
+          {env.presentation[p.id].customPrimitives
+            ? ""
+            : " · rendering fallback (generation unavailable)"}
+        </p>
+      )}
       <div className="inline-tags">
         <span className={`tag ${placeOpen(run, p.id) ? "" : "warning"}`}>
           {placeOpen(run, p.id) ? "Open" : "Closed to new arrivals"}
