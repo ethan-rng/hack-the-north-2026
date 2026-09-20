@@ -15,6 +15,8 @@ import type { Environment, Person, Place, Run } from "@/core/types";
 
 const DEFAULT_ZOOM_PERCENT = 175;
 import { placeOpen, occupancy } from "@/core/engine";
+import { BuildingModel } from "@/ui/buildings/primitives";
+import { stylesById } from "@/ui/buildings/styles";
 
 export type HeatMode = "off" | "traffic" | "occupancy" | "revenue" | "wait";
 type Props = {
@@ -171,7 +173,7 @@ function Building({
   onSelect,
 }: {
   place: Place;
-  appearance: { color: string; asset: string };
+  appearance: { color: string; asset: string; styleId?: string };
   selected: boolean;
   closed: boolean;
   onSelect: () => void;
@@ -180,6 +182,7 @@ function Building({
     place.entry.x - place.position.x,
     place.entry.z - place.position.z,
   );
+  const style = appearance.styleId ? stylesById[appearance.styleId] : undefined;
   return (
     <group
       position={[place.position.x, 0, place.position.z]}
@@ -194,7 +197,15 @@ function Building({
         scale={[9, 0.24, 7]}
         color={selected ? "#203e48" : "#d7dac9"}
       />
-      {appearance.asset === "gate" ? (
+      {style ? (
+        <BuildingModel
+          primitives={style.build({
+            color: closed ? "#a9aaa3" : appearance.color,
+            closed,
+          })}
+          fallbackColor={closed ? "#a9aaa3" : appearance.color}
+        />
+      ) : appearance.asset === "gate" ? (
         <>
           <Box
             position={[-2.5, 2.2, 0]}

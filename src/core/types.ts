@@ -53,6 +53,7 @@ export interface PlaceDetails {
   address?: string;
   parkingSpots?: number;
   amenities?: string[];
+  competitorOf?: string;
 }
 export interface Place {
   id: string;
@@ -99,7 +100,10 @@ export interface Environment {
   services: Service[];
   exit: Point;
   population: Person[];
-  presentation: Record<string, { color: string; asset: string }>;
+  presentation: Record<
+    string,
+    { color: string; asset: string; styleId?: string }
+  >;
 }
 export type ActionType =
   | "move"
