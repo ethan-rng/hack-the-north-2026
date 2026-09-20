@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "crowd-control-julian",
+  "account_id": "5123e5b48cbca84dedd3925e6085c866",
+  "main": "cloudflare/index.ts",
+  "compatibility_date": "2026-09-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./out",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+  },
+  "ai": { "binding": "AI", "remote": true },
+  "durable_objects": {
+    "bindings": [{ "name": "SESSIONS", "class_name": "SimulationSession" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SimulationSession"] }],
+  "vars": {
+    "BASETEN_MODEL": "openai/gpt-oss-120b",
+    "AI_GATEWAY_ID": "crowd-control",
+  },
+  "observability": { "enabled": true },
+  "limits": { "cpu_ms": 30000 },
+}
