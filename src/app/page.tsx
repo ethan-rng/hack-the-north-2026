@@ -16,7 +16,6 @@ import {
   Check,
   ChevronDown,
   CircleDot,
-  Compass,
   ExternalLink,
   Globe2,
   Layers3,
@@ -303,7 +302,7 @@ function PersonInspector({
         <h3>Right now</h3>
         <p className="current-action">
           {p.presence === "exited"
-            ? "Exited the environment"
+            ? "Outside — can choose to re-enter"
             : (p.currentAction?.label ?? "Observing the environment")}
         </p>
         <p className="muted">
@@ -779,6 +778,18 @@ function EventCard({ event }: { event: Event }) {
     </details>
   );
 }
+// Reserve a separate scene viewport above the controls as chapter/status rows change height.
+function observeComposer(node: HTMLFormElement | null) {
+  if (!node) return;
+  const root = node.closest("main");
+  const measure = () =>
+    root?.style.setProperty("--composer-height", `${node.offsetHeight}px`);
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(node);
+  return () => observer.disconnect();
+}
+
 export default function Page() {
   const [snapshot, setSnapshot] = useState<SessionSnapshot>();
   const [description, setDescription] = useState("");
@@ -849,11 +860,11 @@ export default function Page() {
       };
       socket.onclose = (event) => {
         if (alive) {
+          setConnected(false);
           if (event.code !== 1000 && event.code !== 1001)
             console.warn(
               `[ws] closed code=${event.code} reason=${event.reason || "(none)"} clean=${event.wasClean}`,
             );
-          setConnected(false);
           retry = setTimeout(connect, 2500);
         }
       };
@@ -1449,18 +1460,6 @@ export default function Page() {
                     <Sparkline points={history.services} color="#5f8391" />
                   </div>
                 </div>
-                <div className="map-help">
-                  <Compass size={14} /> Drag to orbit · scroll to zoom · click
-                  to inspect
-                </div>
-                <div className="integration-status">
-                  {run.jevAccepted} Jev choices accepted
-                  {run.jevFailed > 0
-                    ? ` · ${run.jevFailed} failed decisions recorded`
-                    : ""}{" "}
-                  · {processing ? "Computing" : "Playback uses no inference"} ·{" "}
-                  {connected ? "Connected" : "Reconnecting"}
-                </div>
               </>
             )}
           </div>
@@ -1679,22 +1678,35 @@ export default function Page() {
                   )}
                 </div>
               </aside>
-              <form className="event-composer" onSubmit={submit}>
+              <form
+                ref={observeComposer}
+                className="event-composer"
+                onSubmit={submit}
+              >
                 <Timeline
                   playback={playback}
                   segments={snapshot?.segments ?? []}
                 />
-                {playback.historical && !playback.playing && !processing && (
-                  <p className="timeline-note">
-                    You are viewing recorded history.{" "}
-                    <button
-                      type="button"
-                      onClick={() => playback.seek(playback.end)}
-                    >
-                      Return to latest state to add an event
-                    </button>
-                  </p>
-                )}
+                <p
+                  className="timeline-note"
+                  style={{
+                    visibility:
+                      playback.historical && !playback.playing && !processing
+                        ? "visible"
+                        : "hidden",
+                  }}
+                  aria-hidden={
+                    !playback.historical || playback.playing || !!processing
+                  }
+                >
+                  You are viewing recorded history.{" "}
+                  <button
+                    type="button"
+                    onClick={() => playback.seek(playback.end)}
+                  >
+                    Return to latest state to add an event
+                  </button>
+                </p>
                 {(snapshot?.segments ?? [])
                   .filter((s) => s.status === "failed")
                   .slice(-1)
@@ -1884,27 +1896,6 @@ export default function Page() {
                     )}
                     <span>Process event</span>
                   </button>
-                </div>
-                <div className="event-suggestions">
-                  <span>TRY</span>
-                  {[
-                    env!.places.find((p) => p.capabilities.includes("purchase"))
-                      ? `Announce 20% off at ${env!.places.find((p) => p.capabilities.includes("purchase"))!.name} for five minutes`
-                      : "Announce a gathering at the central plaza",
-                    "A dinosaur enters the central plaza",
-                  ].map((s) => (
-                    <button
-                      type="button"
-                      key={s}
-                      onClick={() => {
-                        setText(s);
-                        input.current?.focus();
-                      }}
-                    >
-                      {s}
-                      <ArrowUpRight size={12} />
-                    </button>
-                  ))}
                 </div>
               </form>
             </>

@@ -9,6 +9,7 @@ import {
   effectivePrice,
   newRun,
   resultFor,
+  shortestPlacePath,
   tick,
 } from "../src/core/engine";
 import {
@@ -234,18 +235,22 @@ describe("perception, inference and baseline boundaries", () => {
         [effect(kind, kind === "discount" ? run.products[0].id : null, 1)],
         { position: { x: 1000, z: 1000 } },
       );
-      for (const p of run.people.filter((p) => p !== exited)) {
+      for (const p of run.people) {
         expect(p.knownEventIds).toContain(event.id);
         const ticket = createTicket(env, run, p)!;
         expect(ticket.context).toMatchObject({
           perceivedEvents: [expect.objectContaining({ title: event.title })],
         });
-        if (kind === "threat")
+        if (kind === "threat" && p.presence === "inside")
           expect(ticket.choices.some((choice) => choice.id === "flee")).toBe(
             true,
           );
       }
-      expect(exited.knownEventIds).not.toContain(event.id);
+      expect(exited.knownEventIds).toContain(event.id);
+      expect(exited.pending?.choices.map((c) => c.id)).toEqual([
+        "wait",
+        "reenter",
+      ]);
       tick(env, run);
       expect(
         run.people[0].knownEventIds.filter((id) => id === event.id),
@@ -341,6 +346,77 @@ describe("perception, inference and baseline boundaries", () => {
     expect(applyDecision(env, reset, ticket, "leave")).toBe(false);
     expect(reset.time).toBe(0);
   });
+  it.each(["leave", "flee"])(
+    "allows re-entry only after %s completes and preserves personal history",
+    (exitAction) => {
+      const { env, run } = fixture(),
+        p = run.people[0];
+      if (exitAction === "flee")
+        addEvent(env, run, [effect("threat", null, 1)]);
+      p.position = { x: 0, z: 0 };
+      p.budgetRemainingCents = 1234;
+      p.purchaseIds = ["prior-purchase"];
+      p.goals[0].status = "completed";
+      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
+      action(env, run, p, exitAction);
+      tick(env, run);
+      expect(p.presence).toBe("inside");
+      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
+      advance(env, run, 20);
+      expect(p.presence).toBe("exited");
+      expect(choicesFor(env, run, p).map((c) => c.id)).toEqual([
+        "wait",
+        "reenter",
+      ]);
+      action(env, run, p, "reenter");
+      expect(p.presence).toBe("inside");
+      expect(p.position).toEqual(env.exit);
+      expect(p.currentAction?.type).toBe("reenter");
+      expect(p.placeId).toBeUndefined();
+      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
+      advance(env, run, 15);
+      expect(p.position).toEqual({ x: 0, z: 0 });
+      expect(p.currentAction).toBeNull();
+      expect(p.budgetRemainingCents).toBe(1234);
+      expect(p.purchaseIds).toEqual(["prior-purchase"]);
+      expect(p.goals[0].status).toBe("completed");
+      expect(Object.values(run.metrics).reduce((n, m) => n + m.visits, 0)).toBe(
+        0,
+      );
+      action(env, run, p, "leave");
+      advance(env, run, 15);
+      expect(p.presence).toBe("exited");
+      expect(choicesFor(env, run, p).map((c) => c.id)).toContain("reenter");
+    },
+  );
+  it("lets outside waits finish and new global events prompt a return decision", () => {
+    const { env, run } = fixture(),
+      p = run.people[0];
+    action(env, run, p, "leave");
+    advance(env, run, 30);
+    action(env, run, p, "wait");
+    expect(createTicket(env, run, p)).toBeNull();
+    advance(env, run, 5);
+    const ticket = createTicket(env, run, p)!;
+    expect(ticket.context).toMatchObject({ person: { presence: "exited" } });
+    expect(applyDecision(env, run, ticket, "wait")).toBe(true);
+    const event = addEvent(env, run, [effect("attraction", null, 1)]);
+    expect(p.knownEventIds).toContain(event.id);
+    const returnTicket = createTicket(env, run, p)!;
+    expect(returnTicket.context).toMatchObject({
+      perceivedEvents: [expect.objectContaining({ title: event.title })],
+    });
+    expect(applyDecision(env, run, returnTicket, "reenter")).toBe(true);
+  });
+  it("rejects a re-entry choice if the person is already inside", () => {
+    const { env, run } = fixture(),
+      p = run.people[0];
+    p.presence = "exited";
+    const ticket = createTicket(env, run, p)!;
+    p.presence = "inside";
+    expect(applyDecision(env, run, ticket, "reenter")).toBe(false);
+    expect(run.jevAccepted).toBe(0);
+  });
   it("retains exited person records and computes equal-duration comparisons", () => {
     const { env, run } = fixture(),
       p = run.people[0];
@@ -355,25 +431,73 @@ describe("perception, inference and baseline boundaries", () => {
     expect(comparable(a, b)).toBe(true);
     expect(difference(0, 10)).toEqual({ absolute: 10, percent: null });
   });
-  it("generates separated footprints and a reachable central-spine path to every place", () => {
-    const { env } = fixture();
-    for (const place of env.places) {
-      const run = newRun(env),
-        p = run.people[0];
-      action(env, run, p, `move:${place.id}`);
-      expect(p.currentAction?.path).toEqual([
-        { x: p.position.x, z: 0 },
-        { x: place.entry.x, z: 0 },
-        place.entry,
-      ]);
-      advance(env, run, 40);
-      expect(p.placeId).toBe(place.id);
-      for (const other of env.places.filter((p) => p.id !== place.id))
-        expect(
-          Math.abs(place.position.x - other.position.x) >= 8 ||
-            Math.abs(place.position.z - other.position.z) >= 6,
-        ).toBe(true);
+  it("builds a connected weighted layout and uses it only for animated travel", () => {
+    const { env, run } = fixture();
+    expect(env.connections.length).toBeGreaterThanOrEqual(
+      env.places.length - 1,
+    );
+    const physicalLength = (weight: number) => {
+      const lengths = env.connections
+        .filter((connection) => connection.weight === weight)
+        .map((connection) => {
+          const from = env.places.find(
+            (place) => place.id === connection.fromPlaceId,
+          )!;
+          const to = env.places.find(
+            (place) => place.id === connection.toPlaceId,
+          )!;
+          return Math.hypot(
+            from.position.x - to.position.x,
+            from.position.z - to.position.z,
+          );
+        });
+      return lengths.reduce((sum, length) => sum + length, 0) / lengths.length;
+    };
+    expect(physicalLength(3)).toBeGreaterThan(physicalLength(1));
+    const p = run.people[0];
+    const from = env.places[0];
+    const to = env.places.at(-1)!;
+    p.placeId = from.id;
+    p.position = { ...from.entry };
+    const route = shortestPlacePath(env, from.id, to.id);
+    expect(route.at(-1)).toBe(to.id);
+    action(env, run, p, `move:${to.id}`);
+    expect(p.currentAction?.path).toEqual(
+      route.map((placeId) => ({
+        ...env.places.find((place) => place.id === placeId)!.entry,
+      })),
+    );
+    const contextRun = newRun(env);
+    const ticket = createTicket(env, contextRun, contextRun.people[0])!;
+    const contextPlaces = ticket.context.places as Record<string, unknown>[];
+    expect(contextPlaces.every((place) => !("distance" in place))).toBe(true);
+    advance(env, run, 90);
+    expect(p.placeId).toBe(to.id);
+  });
+  it("accepts and lays out up to twelve researched points of interest", () => {
+    const generated = fallbackConfiguration("Large venue");
+    for (let index = 6; index < 12; index++) {
+      generated.places.push({
+        ...structuredClone(generated.places[index % 6]),
+        name: `Additional POI ${index + 1}`,
+      });
+      generated.connections.push({
+        fromPlace: index,
+        toPlace: index + 1,
+        weight: ((index % 3) + 1) as 1 | 2 | 3,
+      });
     }
+    const env = compileEnvironment(
+      generated,
+      "Large venue",
+      [],
+      "unavailable",
+      "twelve",
+    );
+    expect(env.places).toHaveLength(12);
+    expect(
+      shortestPlacePath(env, env.places[0].id, env.places[11].id).at(-1),
+    ).toBe(env.places[11].id);
   });
   it("rejects unknown references and retains unsupported event history", () => {
     const { env, run } = fixture();

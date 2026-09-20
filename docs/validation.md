@@ -2,9 +2,17 @@
 
 The app was exercised with live Baseten Model APIs, Baseten/Exa search, and Jev through Cloudflare Workers AI. No model choices were mocked in the browser or deployment checks.
 
-## Global event update
+## Re-entry and timeline chapters
 
-All 33 unit tests and frontend/Worker type checks pass. Regression coverage checks distant recipients for announcements, attractions, threats and discounts, immediate Jev context delivery, targeted gate updates, exited-person exclusion, duplicate prevention, and legacy stored local events ignoring their old radius.
+Integrated with the weighted graph layout update (`404bd67`); shortest-path movement remains intact. The composer height now determines metric positioning so chapter cards do not cover scene statistics.
+
+All 39 unit tests and frontend/Worker type checks pass. New lifecycle coverage checks that leave and flee must finish before re-entry becomes valid, already-inside/stale requests cannot re-enter, outside waits complete, outside people receive global events, repeated visits preserve personal history, and historical playback respects presence transitions without inference.
+
+`npx tsx scripts/chapters-smoke.mts` uses deterministic engine recordings and mocked API responses (no model calls). It checks chapter labels, checkpoint navigation at 0s/30s, active chapter highlighting, pause-on-seek, refresh, mobile navigation, failed-submission status and zero mutation requests while replaying. Run it against a built app using `SMOKE_URL` (defaults to `http://127.0.0.1:8766`).
+
+## Earlier global event update
+
+All 33 unit tests and frontend/Worker type checks pass. Regression coverage checks distant recipients for announcements, attractions, threats and discounts, immediate Jev context delivery, targeted gate updates, exited-person exclusion (superseded by re-entry support above), duplicate prevention, and legacy stored local events ignoring their old radius.
 
 The deployed airport smoke test submitted a gate-change sign without requesting a terminal-wide announcement. The recording at time zero showed all **40 people** already knew the event. Only the **14 matching passengers** had their goal targets updated; unrelated goals were unchanged. The segment recorded **168 accepted Jev decisions**, zero failures, five purchases and four timed-service completions, then paused at exactly 30 seconds with no further idle calls. New events contain neither an awareness option nor a radius. Production build and deployment passed.
 

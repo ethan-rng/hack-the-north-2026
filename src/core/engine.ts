@@ -27,6 +27,52 @@ export const emptyMetrics = (): Metrics => ({
 });
 export const distance = (a: Point, b: Point) =>
   Math.hypot(a.x - b.x, a.z - b.z);
+export function shortestPlacePath(
+  env: Environment,
+  fromPlaceId: string,
+  toPlaceId: string,
+): string[] {
+  if (fromPlaceId === toPlaceId) return [];
+  const distances = new Map(env.places.map((place) => [place.id, Infinity]));
+  const previous = new Map<string, string>();
+  const unvisited = new Set(env.places.map((place) => place.id));
+  distances.set(fromPlaceId, 0);
+  while (unvisited.size) {
+    let current: string | undefined;
+    let best = Infinity;
+    for (const placeId of unvisited) {
+      const candidate = distances.get(placeId) ?? Infinity;
+      if (candidate < best) {
+        current = placeId;
+        best = candidate;
+      }
+    }
+    if (!current || current === toPlaceId) break;
+    unvisited.delete(current);
+    for (const connection of env.connections ?? []) {
+      const neighbor =
+        connection.fromPlaceId === current
+          ? connection.toPlaceId
+          : connection.toPlaceId === current
+            ? connection.fromPlaceId
+            : undefined;
+      if (!neighbor || !unvisited.has(neighbor)) continue;
+      const candidate = best + connection.weight;
+      if (candidate < (distances.get(neighbor) ?? Infinity)) {
+        distances.set(neighbor, candidate);
+        previous.set(neighbor, current);
+      }
+    }
+  }
+  if (!previous.has(toPlaceId)) return [toPlaceId];
+  const path = [toPlaceId];
+  while (path[0] !== fromPlaceId) {
+    const prior = previous.get(path[0]);
+    if (!prior) return [toPlaceId];
+    path.unshift(prior);
+  }
+  return path.slice(1);
+}
 export const clamp = (n: number, min = 0, max = 1) =>
   Math.max(min, Math.min(max, n));
 export const uid = () => crypto.randomUUID();
@@ -157,7 +203,15 @@ function endAction(p: Person, run: Run) {
   reconsider(p, run);
 }
 export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
-  if (p.presence === "exited") return [];
+  if (p.presence === "exited")
+    return [
+      { id: "wait", type: "wait", label: "Stay outside for now" },
+      {
+        id: "reenter",
+        type: "reenter",
+        label: "Re-enter through the entrance and walk into the venue",
+      },
+    ];
   if (
     env.services.some(
       (s) =>
@@ -278,7 +332,7 @@ export function createTicket(
 ): DecisionTicket | null {
   if (run.status !== "running") return null;
   if (p.pending && Date.now() - p.pending.issuedAt < 25_000) return null;
-  if (p.nextDecisionAt > run.time || p.presence === "exited") return null;
+  if (p.nextDecisionAt > run.time) return null;
   const choices = choicesFor(env, run, p);
   if (choices.length < 2) return null;
   const perceived = run.events
@@ -302,6 +356,7 @@ export function createTicket(
       time: run.time,
       person: {
         name: p.displayName,
+        presence: p.presence,
         goals: p.goals,
         interests: p.interests,
         budgetCents: p.budgetRemainingCents,
@@ -325,7 +380,6 @@ export function createTicket(
         name: place.name,
         tags: place.tags,
         capabilities: place.capabilities,
-        distance: Math.round(distance(p.position, place.entry)),
         ...(p.placeId === place.id
           ? {
               occupancy: occupancy(run, place.id),
@@ -422,16 +476,28 @@ export function applyDecision(
     status: "active",
   };
   p.currentAction = action;
-  if (["move", "leave", "flee"].includes(chosen.type)) {
+  if (["move", "leave", "flee", "reenter"].includes(chosen.type)) {
+    const fromPlaceId = p.placeId;
+    if (chosen.type === "reenter") {
+      p.presence = "inside";
+      p.position = { ...env.exit };
+      remember(p, "Re-entered the environment");
+    }
     const target =
       chosen.type === "move"
         ? env.places.find((x) => x.id === chosen.targetId)!.entry
-        : env.exit;
-    action.path = [
-      { x: p.position.x, z: 0 },
-      { x: target.x, z: 0 },
-      { ...target },
-    ];
+        : chosen.type === "reenter"
+          ? { x: 0, z: 0 }
+          : env.exit;
+    action.path =
+      chosen.type === "move" && fromPlaceId
+        ? shortestPlacePath(env, fromPlaceId, chosen.targetId!).map(
+            (placeId) => ({
+              ...env.places.find((place) => place.id === placeId)!.entry,
+            }),
+          )
+        : [{ ...target }];
+
     delete p.placeId;
     p.nextDecisionAt = 1e9;
     if (chosen.type === "flee") p.mood = "frightened";
@@ -530,9 +596,8 @@ export function activateEvent(env: Environment, run: Run, event: Event) {
 function perceiveEvents(env: Environment, run: Run) {
   for (const event of run.events.filter((e) => e.status === "active")) {
     for (const p of run.people) {
-      if (p.presence === "exited" || p.knownEventIds.includes(event.id))
-        continue;
-      // Every event reaches everyone still in the scenario, regardless of position.
+      if (p.knownEventIds.includes(event.id)) continue;
+      // Global events also reach people outside, who can decide to return.
       // Legacy stored awareness/radius fields are intentionally ignored.
       p.knownEventIds.push(event.id);
       remember(p, `Learned: ${event.title}`);
@@ -736,7 +801,14 @@ export function tick(env: Environment, run: Run, seconds = 1) {
       event.status = "completed";
   perceiveEvents(env, run);
   for (const p of run.people) {
-    if (p.presence === "exited") continue;
+    if (p.presence === "exited") {
+      if (
+        p.currentAction?.endsAt !== undefined &&
+        p.currentAction.endsAt <= run.time
+      )
+        endAction(p, run);
+      continue;
+    }
     p.hunger = clamp(p.hunger + dt * 0.0008);
     p.fatigue = clamp(p.fatigue + dt * 0.0006);
     p.stress = clamp(p.stress - dt * 0.002);
@@ -781,6 +853,8 @@ export function tick(env: Environment, run: Run, seconds = 1) {
           p.presence = "exited";
           completeGoal(p, run, "exit");
           remember(p, "Exited the environment");
+        } else if (a.type === "reenter") {
+          remember(p, "Returned to the venue");
         } else {
           const place = env.places.find((x) => x.id === a.targetId)!;
           if (
@@ -795,6 +869,7 @@ export function tick(env: Environment, run: Run, seconds = 1) {
           } else remember(p, `Could not enter ${place.name}: closed or full`);
         }
         endAction(p, run);
+        if (p.presence === "exited") p.nextDecisionAt = run.time + 5;
       }
     } else if (a.endsAt !== undefined && a.endsAt <= run.time) {
       if (a.type === "eat" && p.foodHeld > 0) {

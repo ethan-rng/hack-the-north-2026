@@ -870,13 +870,6 @@ label {
   gap: 6px;
   z-index: 26;
 }
-.integration-status {
-  position: absolute;
-  bottom: 17px;
-  left: 246px;
-  font-size: 8px;
-  color: #8b9686;
-}
 .entity-list {
   position: absolute;
   top: 96px;
@@ -1584,8 +1577,7 @@ label {
   .event-prompt .primary span {
     display: none;
   }
-  .map-help,
-  .integration-status {
+  .map-help {
     left: 185px;
   }
   .onboarding-copy {
@@ -1722,10 +1714,6 @@ label {
     bottom: 18px;
     left: 15px;
   }
-  .integration-status {
-    bottom: 0;
-    left: 15px;
-  }
   .summary-overlay {
     top: 65px;
     position: fixed;
@@ -1780,8 +1768,7 @@ label {
 .world-metrics {
   left: 50%;
 }
-.map-help,
-.integration-status {
+.map-help {
   left: 20px;
 }
 @media (max-width: 1180px) {
@@ -1794,8 +1781,7 @@ label {
   .world-metrics {
     left: 50%;
   }
-  .map-help,
-  .integration-status {
+  .map-help {
     left: 10px;
   }
 }
@@ -1806,8 +1792,7 @@ label {
   .world-top {
     left: 15px;
   }
-  .map-help,
-  .integration-status {
+  .map-help {
     left: 15px;
   }
 }
@@ -1887,8 +1872,88 @@ label {
   color: #8c977b;
   white-space: nowrap;
 }
+.timeline-scrubber {
+  position: relative;
+  padding-top: 20px;
+}
+.timeline-markers {
+  position: absolute;
+  inset: 0 7px auto;
+  height: 20px;
+}
+.timeline-markers button {
+  position: absolute;
+  top: 0;
+  width: 20px;
+  height: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  color: #8a9c7a;
+  padding-top: 1px;
+}
+.timeline-markers button::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 1px;
+  height: 8px;
+  background: currentColor;
+}
+.timeline-markers button[aria-current="step"],
+.timeline-markers button:hover:not(:disabled) {
+  color: #395b3d;
+}
+.timeline-markers button[aria-current="step"] svg {
+  fill: #cad9bb;
+}
+.timeline-chapter-heading {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-top: 12px;
+  font-size: 9px;
+  color: #7e8b72;
+}
+.timeline-chapter-heading b {
+  color: var(--ink);
+}
 .timeline-segments button {
-  border-bottom: 1px solid #bdc8ae;
+  flex: 0 0 180px;
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  padding: 9px 10px;
+  border: 1px solid #dce3d1;
+  border-radius: 6px;
+  white-space: normal;
+}
+.timeline-segments button[aria-current="step"] {
+  background: #e8eddf;
+  border-color: #8a9c7a;
+}
+.timeline-segments button:hover:not(:disabled) {
+  border-color: #617e62;
+}
+.timeline-segments button:disabled {
+  opacity: 0.55;
+}
+.chapter-meta {
+  font-size: 9px;
+  white-space: nowrap;
+}
+.chapter-title {
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .timeline-note {
   font-size: 10px;
@@ -1955,10 +2020,10 @@ label {
   z-index: 35;
 }
 .world-metrics {
-  bottom: 265px;
+  bottom: 48px;
 }
 .map-help {
-  bottom: 243px;
+  bottom: 26px;
 }
 @media (max-width: 1180px) {
   .timeline-status {
@@ -1977,5 +2042,72 @@ label {
   }
   .processing-overlay {
     top: 45%;
+  }
+}
+
+/* The canvas and controls occupy disjoint panes, including when status rows grow. */
+@media (min-width: 851px) {
+  .workspace .world-pane:not(.summary-world) {
+    bottom: var(--composer-height, 260px);
+    overflow: hidden;
+  }
+  .workspace .event-composer {
+    left: 220px;
+    right: 330px;
+    bottom: 0;
+    border-radius: 0;
+    border-width: 1px 0 0;
+    background: #fffdf8;
+    box-shadow: none;
+    padding: 14px 20px;
+    max-height: 45dvh;
+    overflow-y: auto;
+  }
+}
+@media (min-width: 1600px) {
+  .workspace .event-composer {
+    right: 360px;
+  }
+}
+@media (min-width: 851px) and (max-width: 1180px) {
+  .workspace .event-composer {
+    left: 175px;
+    right: 300px;
+  }
+}
+
+.scene-zoom {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 25;
+  border: 1px solid #d5dfcf;
+  border-radius: 5px;
+  background: #fbfaf5;
+  padding: 5px 8px;
+  color: #526747;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+@media (max-width: 850px) {
+  .scene-zoom {
+    bottom: 105px;
+    right: 15px;
+  }
+}
+
+/* Anchor scene totals beside the entity rail, above the connection status. */
+.workspace .world-metrics {
+  left: 20px;
+  bottom: 32px;
+  transform: none;
+  max-width: calc(100% - 40px);
+}
+@media (max-width: 850px) {
+  .workspace .world-metrics {
+    left: 15px;
+    bottom: 32px;
+    max-width: calc(100% - 30px);
   }
 }

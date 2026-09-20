@@ -66,6 +66,12 @@ export interface Place {
   entry: Point;
   details?: PlaceDetails;
 }
+export interface PlaceConnection {
+  id: string;
+  fromPlaceId: string;
+  toPlaceId: string;
+  weight: number;
+}
 export interface Service {
   id: string;
   placeId: string;
@@ -88,6 +94,7 @@ export interface Environment {
   provenance: Provenance[];
   assumptions: string[];
   places: Place[];
+  connections: PlaceConnection[];
   products: Product[];
   services: Service[];
   exit: Point;
@@ -104,6 +111,7 @@ export type ActionType =
   | "rest"
   | "flee"
   | "leave"
+  | "reenter"
   | "wait";
 export interface Choice {
   id: string;
