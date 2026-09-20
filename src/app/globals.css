@@ -1736,3 +1736,18 @@ label {
     right: 15px;
   }
 }
+
+/* Anchor scene totals beside the entity rail, above the connection status. */
+.workspace .world-metrics {
+  left: 20px;
+  bottom: 32px;
+  transform: none;
+  max-width: calc(100% - 40px);
+}
+@media (max-width: 850px) {
+  .workspace .world-metrics {
+    left: 15px;
+    bottom: 32px;
+    max-width: calc(100% - 30px);
+  }
+}

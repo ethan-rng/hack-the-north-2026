@@ -16,7 +16,6 @@ import {
   Check,
   ChevronDown,
   CircleDot,
-  Compass,
   ExternalLink,
   Globe2,
   Layers3,
@@ -1114,10 +1113,6 @@ export default function Page() {
                     label="Services completed"
                     value={totals!.serviceCompletions}
                   />
-                </div>
-                <div className="map-help">
-                  <Compass size={14} /> Drag to orbit · scroll to zoom · click
-                  to inspect
                 </div>
                 <div className="integration-status">
                   {run.jevAccepted} Jev choices accepted
