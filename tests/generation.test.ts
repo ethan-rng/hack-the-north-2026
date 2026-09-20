@@ -217,6 +217,22 @@ describe("venue-aware generation", () => {
     });
   });
 
+  it("assigns a varied compatible styleId to every place, even without LLM input", () => {
+    const env = compile(configuration("mall"));
+    const styles = env.places.map((p) => env.presentation[p.id].styleId);
+    expect(styles.every((s) => typeof s === "string" && s.length > 0)).toBe(
+      true,
+    );
+    // Diversity: fewer than half the places may share the same style.
+    const counts = new Map<string, number>();
+    for (const s of styles as string[])
+      counts.set(s, (counts.get(s) ?? 0) + 1);
+    const maxRepeats = Math.max(...counts.values());
+    expect(maxRepeats).toBeLessThanOrEqual(
+      Math.max(1, Math.floor(env.places.length / 2)),
+    );
+  });
+
   it("keeps future groups absent until their scheduled arrival and preserves them on reset", () => {
     const env = settlePopulation(compile(configuration("park")));
     const run = newScenario(env);

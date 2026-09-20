@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { spatialLayout, supportedEvidence } from "./spatial";
 import { contextualPopulation } from "./population";
+import { pickStyleId, styleFor, styleIds } from "./styleCatalog";
 
 const evidenceSchema = z.object({
   sourceIds: z.array(z.string().max(30)).min(1).max(5),
@@ -101,7 +102,7 @@ export const generatedSchema = z.object({
         address: z.string().max(120).optional(),
         parkingSpots: z.number().int().min(0).max(9999).optional(),
         amenities: z.array(z.string().max(40)).max(8).optional(),
-        styleId: z.string().max(40).optional(),
+        styleId: z.enum(styleIds).optional(),
         competitorOf: z.string().max(40).optional(),
       }),
     )
@@ -379,6 +380,7 @@ export function compileEnvironment(
     population: [],
     presentation: {},
   };
+  const usedStyles = new Set<string>();
   data.places.forEach((input, index) => {
     const id = `place-${index + 1}`;
     const { position, entry, footprint, zone, geographic } = layout[index];
@@ -418,10 +420,24 @@ export function compileEnvironment(
       geographic,
       ...(Object.keys(details).length ? { details } : {}),
     });
+    let chosenStyle: string | undefined = undefined;
+    const supplied = input.styleId ? styleFor(input.styleId) : undefined;
+    if (supplied && supplied.assets.includes(input.asset)) {
+      chosenStyle = supplied.id;
+    } else {
+      chosenStyle = pickStyleId(
+        input.asset,
+        seed,
+        index,
+        input.name,
+        usedStyles,
+      );
+    }
+    if (chosenStyle) usedStyles.add(chosenStyle);
     env.presentation[id] = {
       color: colors[index % colors.length],
       asset: input.asset,
-      ...(input.styleId ? { styleId: input.styleId } : {}),
+      ...(chosenStyle ? { styleId: chosenStyle } : {}),
     };
     input.products.forEach((product, i) =>
       env.products.push({
