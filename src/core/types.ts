@@ -36,6 +36,9 @@ export interface Goal {
   targetCategory?: string;
   subjectKey?: string;
   deadlineSeconds?: number;
+  sourceEventId?: string;
+  expiresAtSeconds?: number;
+  responseAction?: "move" | "flee";
   priority: number;
   status: "pending" | "completed";
 }
