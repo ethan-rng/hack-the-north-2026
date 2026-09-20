@@ -3,15 +3,63 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, OrthographicCamera } from "@react-three/drei";
 import { Component, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Environment, Person, Place, Run } from "@/core/types";
-import { placeOpen } from "@/core/engine";
+import { placeOpen, occupancy } from "@/core/engine";
 
+export type HeatMode = "off" | "traffic" | "occupancy" | "revenue" | "wait";
 type Props = {
   environment: Environment;
   run?: Run;
   selected?: string;
   onSelect: (id: string) => void;
   preview?: boolean;
+  heatMode?: HeatMode;
 };
+function HeatLayer({
+  environment,
+  run,
+  mode,
+}: {
+  environment: Environment;
+  run: Run;
+  mode: HeatMode;
+}) {
+  if (mode === "off") return null;
+  const values = environment.places.map((p) => {
+    const m = run.metrics[p.id];
+    if (mode === "traffic") return m?.visits ?? 0;
+    if (mode === "occupancy") return occupancy(run, p.id);
+    if (mode === "revenue") return m?.revenue ?? 0;
+    if (mode === "wait")
+      return m && m.waitSamples ? m.waitTotal / m.waitSamples : 0;
+    return 0;
+  });
+  const max = Math.max(1, ...values);
+  return (
+    <>
+      {environment.places.map((p, i) => {
+        const intensity = values[i] / max;
+        if (intensity < 0.03) return null;
+        const hue = 240 - intensity * 220;
+        const color = `hsl(${Math.round(hue)}, 85%, ${Math.round(50 + intensity * 6)}%)`;
+        return (
+          <mesh
+            key={p.id}
+            position={[p.position.x, 0.03, p.position.z]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <circleGeometry args={[5.4, 40]} />
+            <meshBasicMaterial
+              color={color}
+              transparent
+              opacity={0.3 + intensity * 0.45}
+              depthWrite={false}
+            />
+          </mesh>
+        );
+      })}
+    </>
+  );
+}
 function Camera({
   preview,
   center,
@@ -160,6 +208,82 @@ function Building({
           <Box position={[0, 0.95, -0.5]} scale={[4, 1, 0.2]} color="#9a8062" />
           <Tree x={-2.8} z={-1.7} />
           <Tree x={2.8} z={1.5} />
+        </>
+      ) : appearance.asset === "parking_lot" ? (
+        <>
+          <Box position={[0, 0.24, 0]} scale={[8.4, 0.05, 6.4]} color="#3f3f3d" />
+          {[-2.8, -1.4, 0, 1.4, 2.8].map((x) => (
+            <Box
+              key={`line-${x}`}
+              position={[x, 0.28, 0]}
+              scale={[0.06, 0.02, 5.6]}
+              color="#e8e4c9"
+            />
+          ))}
+          {[-2.1, -0.7, 0.7, 2.1].map((x, i) =>
+            [-1.6, 1.6].map((cz, j) => (
+              <group
+                key={`car-${x}-${cz}`}
+                position={[x, 0.3, cz]}
+                rotation={[0, cz > 0 ? Math.PI : 0, 0]}
+              >
+                <Box
+                  position={[0, 0.28, 0]}
+                  scale={[1, 0.55, 2]}
+                  color={
+                    ["#c25c4c", "#5f8391", "#c9b478", "#88a37a"][(i + j) % 4]
+                  }
+                />
+                <Box
+                  position={[0, 0.62, -0.2]}
+                  scale={[0.88, 0.4, 1]}
+                  color="#2b2b28"
+                />
+              </group>
+            )),
+          )}
+        </>
+      ) : appearance.asset === "parking_garage" ? (
+        <>
+          <Box
+            position={[0, 0.4, 0]}
+            scale={[8.4, 0.2, 5.4]}
+            color={closed ? "#a9aaa3" : appearance.color}
+          />
+          <Box
+            position={[0, 1.6, 0]}
+            scale={[8.2, 0.2, 5.2]}
+            color={closed ? "#a9aaa3" : appearance.color}
+          />
+          <Box
+            position={[0, 2.8, 0]}
+            scale={[8.2, 0.2, 5.2]}
+            color={closed ? "#a9aaa3" : appearance.color}
+          />
+          <Box
+            position={[0, 4, 0]}
+            scale={[8.4, 0.25, 5.4]}
+            color="#5c5c58"
+          />
+          {[-4.1, -1.4, 1.4, 4.1].map((x) => (
+            <Box
+              key={`col-${x}`}
+              position={[x, 2.1, 0]}
+              scale={[0.4, 4.2, 5.2]}
+              color={closed ? "#a9aaa3" : appearance.color}
+            />
+          ))}
+          {[1, 2.2].map((y) =>
+            [-2.6, -1.2, 1.2, 2.6].map((x) => (
+              <Box
+                key={`slot-${x}-${y}`}
+                position={[x, y, 2.55]}
+                scale={[1, 0.6, 0.06]}
+                color="#2c2c2a"
+              />
+            )),
+          )}
+          <Box position={[0, 1.2, 2.6]} scale={[1.8, 1.4, 0.1]} color="#385965" />
         </>
       ) : appearance.asset === "attraction" ? (
         <>
@@ -330,6 +454,7 @@ export default function World({
   selected,
   onSelect,
   preview,
+  heatMode = "off",
 }: Props) {
   const [zoomPercent, setZoomPercent] = useState(100);
   const people = run?.people ?? environment.population;
@@ -421,6 +546,9 @@ export default function World({
             scale={[scene.width, 1.1, scene.depth]}
             color="#c5d2b9"
           />
+          {run && heatMode !== "off" && (
+            <HeatLayer environment={environment} run={run} mode={heatMode} />
+          )}
           {(environment.connections ?? []).map((connection) => {
             const from = environment.places.find(
               (place) => place.id === connection.fromPlaceId,

@@ -45,9 +45,18 @@ export const generatedSchema = z.object({
           "attraction",
           "rest",
           "open",
+          "parking_lot",
+          "parking_garage",
         ]),
         sourceIds: z.array(z.string().max(30)).max(5),
         evidenceNote: z.string().max(400),
+        operatingHours: z.string().max(80).optional(),
+        permit: z.string().max(80).optional(),
+        accessibility: z.string().max(120).optional(),
+        capacityNote: z.string().max(120).optional(),
+        address: z.string().max(120).optional(),
+        parkingSpots: z.number().int().min(0).max(9999).optional(),
+        amenities: z.array(z.string().max(40)).max(8).optional(),
       }),
     )
     .min(6)
@@ -335,6 +344,18 @@ export function compileEnvironment(
     } else caps.delete("purchase");
     if (input.products.some((p) => p.category === "food")) caps.add("eat");
     if (caps.has("receive_service")) caps.add("queue");
+    const details: NonNullable<
+      import("./types").Place["details"]
+    > = {};
+    if (input.operatingHours) details.operatingHours = input.operatingHours;
+    if (input.permit) details.permit = input.permit;
+    if (input.accessibility) details.accessibility = input.accessibility;
+    if (input.capacityNote) details.capacityNote = input.capacityNote;
+    if (input.address) details.address = input.address;
+    if (typeof input.parkingSpots === "number")
+      details.parkingSpots = input.parkingSpots;
+    if (input.amenities && input.amenities.length)
+      details.amenities = input.amenities;
     env.places.push({
       id,
       name: input.name,
@@ -345,6 +366,7 @@ export function compileEnvironment(
       admissionCapacity: input.capacity,
       position,
       entry,
+      ...(Object.keys(details).length ? { details } : {}),
     });
     env.presentation[id] = {
       color: colors[index % colors.length],
