@@ -1551,9 +1551,10 @@ export default function Page() {
               </button>
               <nav
                 id="environment-entities"
-                className="entity-list"
+                className={`entity-list ${sidebarOpen ? "open" : "closed"}`}
                 aria-label="Environment entities"
-                hidden={!sidebarOpen}
+                aria-hidden={!sidebarOpen}
+                inert={!sidebarOpen}
               >
                 <div className="segmented">
                   <button

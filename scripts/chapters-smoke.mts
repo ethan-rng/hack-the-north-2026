@@ -108,14 +108,13 @@ try {
     await route.fulfill({ json: payload });
   });
   await page.goto(process.env.SMOKE_URL || "http://127.0.0.1:8766");
-  const sidebar = page.getByRole("navigation", {
-    name: "Environment entities",
-  });
+  const sidebar = page.locator("#environment-entities");
   const sidebarToggle = page.getByRole("button", {
     name: "Expand sidebar",
     exact: true,
   });
   await expect(sidebar).toBeHidden();
+  await expect(sidebar).toHaveCSS("transition-duration", "0.25s, 0.18s, 0s");
   await expect(sidebarToggle).toHaveAttribute("aria-expanded", "false");
   await sidebarToggle.click();
   await expect(sidebar).toBeVisible();
