@@ -4,7 +4,7 @@ import {
   buildDemoEnvironment,
   demoKindForDescription,
 } from "../src/core/demoEnvironments";
-import { newRun } from "../src/core/engine";
+import { activateEvent, choicesFor, newRun } from "../src/core/engine";
 import type { Event } from "../src/core/types";
 
 function event(text: string): Event {
@@ -61,6 +61,19 @@ describe("curated demo environments", () => {
       run.products.find((product) => product.id === offer.effects[0].targetId)
         ?.name,
     ).toBe("Ice cream");
+    run.events.push(offer);
+    activateEvent(environment, run, offer);
+    const promotionCohort = run.people.filter((person) =>
+      person.goals.some((goal) =>
+        goal.description.startsWith("Limited-time promotion:"),
+      ),
+    );
+    expect(promotionCohort.length).toBeGreaterThan(20);
+    expect(
+      choicesFor(environment, run, promotionCohort[0]).some((choice) =>
+        choice.id.startsWith("promotion:"),
+      ),
+    ).toBe(true);
   });
 
   it("prepares a 30-astronaut Mars base and a reliable alien landing sequence", () => {
