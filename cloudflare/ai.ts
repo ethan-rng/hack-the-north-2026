@@ -5,6 +5,11 @@ import {
   fallbackConfiguration,
   generatedSchema,
 } from "../src/core/generation";
+import {
+  applyCuratedDemoEvent,
+  buildDemoEnvironment,
+  demoKindForDescription,
+} from "../src/core/demoEnvironments";
 import type {
   DecisionTicket,
   Environment,
@@ -263,6 +268,21 @@ export async function researchEnvironment(
       ? `Retrieved ${sources.length} sources. Building and validating the environment…`
       : "Research unavailable. Building a labeled assumption-based environment…",
   );
+  const demoKind = demoKindForDescription(description);
+  if (demoKind) {
+    stage(
+      demoKind === "yorkdale"
+        ? "Preparing the researched Yorkdale mall demonstration…"
+        : "Preparing the Mars base demonstration…",
+    );
+    return buildDemoEnvironment(
+      demoKind,
+      description,
+      sources,
+      researchStatus,
+      setupId,
+    );
+  }
   let generated;
   try {
     generated = (
@@ -310,6 +330,7 @@ export async function interpretEvent(
   run: Run,
   event: Event,
 ) {
+  if (applyCuratedDemoEvent(environment, run, event)) return;
   const structuredResult = await structured(
     env,
     "event",
@@ -377,7 +398,7 @@ export async function decide(
           action: {
             type: "choice",
             instructions:
-              "Choose this individual's next action from valid choices. Fulfill unfinished personal goals using the provided targets and capabilities: move to a place before joining its service or purchasing there. If hungry, buy food then eat. Respect budget, interests, patience, known events, and planned departure; leave when goals are completed or departure is near. Keep productive queues/services unless a reason to leave arises. Do not browse repeatedly without progress. Perceived threats may justify fleeing, but choices depend on this person's traits. All submitted events are globally known, including to people outside; individual reactions still depend on goals and traits. If presence is exited, choose between staying outside and reentering. Reenter only for a meaningful reason such as a relevant new event or unfinished goal, considering threats and departure plans; do not repeatedly leave and return without a reason. Reentering preserves completed goals, purchases, and remaining budget.",
+              "Choose this individual's next action from valid choices. Fulfill unfinished personal goals using the provided targets and capabilities: move to a place before joining its service or purchasing there. If hungry, buy food then eat. A pending goal explicitly marked 'Limited-time promotion' is a time-sensitive priority: when feasible, choose movement or purchase toward its target instead of an unrelated ordinary goal. Respect budget, interests, patience, known events, and planned departure; leave when goals are completed or departure is near. Keep productive queues/services unless a reason to leave arises. Do not browse repeatedly without progress. Perceived threats may justify fleeing, but choices depend on this person's traits. All submitted events are globally known, including to people outside; individual reactions still depend on goals and traits. If presence is exited, choose between staying outside and reentering. Reenter only for a meaningful reason such as a relevant new event or unfinished goal, considering threats and departure plans; do not repeatedly leave and return without a reason. Reentering preserves completed goals, purchases, and remaining budget.",
             criteria: Object.fromEntries(
               ticket.choices.map((c) => [c.id, c.label]),
             ),

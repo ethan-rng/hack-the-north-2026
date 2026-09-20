@@ -1,6 +1,7 @@
 export type Point = { x: number; z: number };
 export type VenueKind =
   "airport" | "mall" | "neighborhood" | "park" | "small_venue" | "generic";
+export type DemoKind = "yorkdale" | "mars";
 export interface Footprint {
   width: number;
   depth: number;
@@ -124,6 +125,10 @@ export interface Environment {
     string,
     { color: string; asset: string; styleId?: string }
   >;
+  demo?: {
+    kind: DemoKind;
+    safePlaceId?: string;
+  };
 }
 export type ActionType =
   | "move"
@@ -233,7 +238,7 @@ export interface Event {
   position: Point;
   effects: Effect[];
   approximationNotes: string[];
-  visual: "dinosaur" | "marker";
+  visual: "dinosaur" | "marker" | "ufo";
   submittedAt: number;
 }
 export interface Assignment {

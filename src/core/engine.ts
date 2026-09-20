@@ -105,6 +105,12 @@ export function movementPath(
 export const clamp = (n: number, min = 0, max = 1) =>
   Math.max(min, Math.min(max, n));
 export const uid = () => crypto.randomUUID();
+// A segment is only 30 simulated seconds. At five world units per second,
+// people can reach a nearby store, make a fresh Jev decision, and still
+// complete a short service or purchase during the recorded response.
+const WALK_SPEED = 5;
+const FLEE_SPEED = 8;
+const MARS_FLEE_SPEED = 10;
 export function newRun(env: Environment, duration = 180): Run {
   return {
     runId: uid(),
@@ -291,6 +297,14 @@ function socialChoices(env: Environment, run: Run, p: Person): Choice[] {
     },
   ];
 }
+function promotionGoal(p: Person) {
+  return p.goals.find(
+    (goal) =>
+      goal.status === "pending" &&
+      goal.kind === "buy" &&
+      goal.description.startsWith("Limited-time promotion:"),
+  );
+}
 export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
   if (p.presence !== "inside") return [];
   if (
@@ -309,9 +323,23 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
   );
   if (!threatened && p.goals.every((goal) => goal.status === "completed"))
     return socialChoices(env, run, p);
-  const choices: Choice[] = [
-    { id: "wait", type: "wait", label: "Wait here briefly and observe" },
-  ];
+  const choices: Choice[] = [];
+  const promotion = promotionGoal(p);
+  if (promotion?.targetId && p.placeId !== promotion.targetId) {
+    const target = env.places.find((place) => place.id === promotion.targetId);
+    if (target && placeOpen(run, target.id))
+      choices.push({
+        id: `promotion:${target.id}`,
+        type: "move",
+        targetId: target.id,
+        label: `Act on the limited-time promotion at ${target.name}`,
+      });
+  }
+  choices.push({
+    id: "wait",
+    type: "wait",
+    label: "Wait here briefly and observe",
+  });
   if (threatened) {
     const threatenedPlaceIds = new Set(
       run.events
@@ -327,7 +355,7 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
             .map((effect) => effect.targetId!),
         ),
     );
-    const safePlace = env.places
+    const safePlaces = env.places
       .filter(
         (place) =>
           placeOpen(run, place.id) &&
@@ -336,6 +364,16 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
           occupancy(run, place.id) < place.admissionCapacity,
       )
       .sort(
+        (a, b) =>
+          occupancy(run, a.id) / a.admissionCapacity -
+            occupancy(run, b.id) / b.admissionCapacity ||
+          a.id.localeCompare(b.id),
+      );
+    // The Mars demo designates a real bunker. It remains only an available
+    // Jev choice; individual astronauts still decide whether to take it.
+    const safePlace =
+      safePlaces.find((place) => place.id === env.demo?.safePlaceId) ??
+      safePlaces.sort(
         (a, b) =>
           occupancy(run, a.id) / a.admissionCapacity -
             occupancy(run, b.id) / b.admissionCapacity ||
@@ -742,6 +780,46 @@ function perceiveEvents(env: Environment, run: Run) {
             relevant = true;
           }
         } else relevant = true;
+        if (
+          env.demo?.kind === "yorkdale" &&
+          effect.kind === "discount" &&
+          effect.targetId
+        ) {
+          const product = run.products.find(
+            (candidate) => candidate.id === effect.targetId,
+          );
+          if (product) {
+            const ordinal = Number(p.id.match(/\d+$/)?.[0] ?? 0);
+            const cohortOffset =
+              [...product.id].reduce(
+                (sum, character) => sum + character.charCodeAt(0),
+                0,
+              ) % 3;
+            const eligible =
+              (ordinal + cohortOffset) % 3 === 0 &&
+              p.priceSensitivity >= 0.2;
+            const goalId = `promotion:${event.id}:${product.id}`;
+            const alreadyAssigned = p.goals.some(
+              (goal) =>
+                goal.id === goalId ||
+                (goal.targetId === product.placeId &&
+                  goal.description.startsWith("Limited-time promotion:")),
+            );
+            // A distinct price-aware cohort is exposed to a time-sensitive
+            // offer. Jev still makes each person's actual movement and purchase
+            // choice, but the demo promotion visibly changes their priorities.
+            if (eligible && !alreadyAssigned)
+              p.goals.push({
+                id: goalId,
+                kind: "buy",
+                targetId: product.placeId,
+                targetCategory: product.category,
+                description: `Limited-time promotion: buy ${product.name} at ${env.places.find((place) => place.id === product.placeId)?.name ?? "the featured store"}`,
+                priority: 1.25,
+                status: "pending",
+              });
+          }
+        }
         if (effect.kind === "threat") {
           p.stress = clamp(p.stress + 0.4 * (1 - p.crowdTolerance / 2));
           p.mood = "frightened";
@@ -964,7 +1042,13 @@ export function tick(env: Environment, run: Run, seconds = 1) {
     const a = p.currentAction;
     if (!a) continue;
     if (a.path) {
-      let remaining = dt * (a.type === "flee" ? 4 : 2);
+      let remaining =
+        dt *
+        (a.type === "flee"
+          ? env.demo?.kind === "mars"
+            ? MARS_FLEE_SPEED
+            : FLEE_SPEED
+          : WALK_SPEED);
       while (a.path.length && remaining > 0) {
         const next = a.path[0],
           dist = distance(p.position, next);
