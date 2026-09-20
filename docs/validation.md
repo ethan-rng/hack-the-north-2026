@@ -2,7 +2,21 @@
 
 The app was exercised with live Baseten Model APIs, Baseten/Exa search, and Jev through Cloudflare Workers AI. No model choices were mocked in the browser or deployment checks.
 
-## Automated checks
+## Event-driven playback update
+
+The new 30-second processing flow replaces the continuous-run behavior described in the earlier scenario results below. All 28 unit tests pass, including settled initial placement, paused-state guards, exact segment duration, decision budgets, interrupted requests, failure preservation, immutable history, and position interpolation without future stock/budget leakage.
+
+A live local mall browser test accepted **104 Jev decisions** for the first 30-second promotion segment and **60** for the second dinosaur segment, with no failures. Initial state stayed frozen with zero calls. Both segments completed before playback started. Play/pause, 0.5× and 4× speeds, backward/forward seeking, automatic end pause, reconnect, exact reset, concurrent-event rejection and stale-run rejection passed. Idle and playback checks observed **zero additional calls**. Desktop and mobile screenshots were inspected; no uncaught browser errors occurred. These call counts are observations, not fixed quotas.
+
+The updated airport smoke test also passed with live research and a gate-change event: **129 accepted Jev decisions**, zero failures, **14 affected passengers**, zero unrelated goal updates, one purchase and seven timed-service completions. It paused at exactly 30 simulated seconds and remained idle without additional calls.
+
+The public check also exercised invalid event interpretation: a category-wide discount with an unresolved target was rejected without advancing the scene. The interpretation prompt now explicitly expands category offers to existing product IDs. A startup regression check delays session creation and verifies that submission waits for the session and preserves a description typed during loading.
+
+Final public deployment verification passed at `https://crowd-control-julian.juelzlax.workers.dev` (Worker version `f9119f3b-0568-44f1-9a57-baf745c1271a`). The promotion and dinosaur segments each recorded exactly 30 simulated seconds, using **104** and **77** Jev attempts respectively. Playback, 0.5×/4× speeds, seeking, automatic pause, reconnect, reset and request guards passed with zero idle/playback calls and no browser errors.
+
+## Earlier continuous-run validation
+
+### Automated checks
 
 - Production static export and both frontend/Worker TypeScript checks pass.
 - 17 engine/integration-boundary unit tests pass: last-unit contention; checkout-time price/budget validation; reusable free service slots; noninterruptible draining; checkout interruption; queue patience; promotion overlap/expiry; explicit food consumption; local gate-change awareness and fixed deadline; stale responses; unrelated revisions; exact reset; retained exited people; equal comparison durations; layout reachability; asset-independent capabilities/goals; invalid event targets; actual tool-source extraction.
@@ -42,5 +56,5 @@ This validates common service mechanics and knowledge-mediated routing. It does 
 - Geometry, population, stock, budget, prices and operating times are assumptions. Source attribution and limitations remain visible in the app.
 - Search and model availability can vary; bounded, labeled fallbacks remain part of the implementation.
 - Generated services use compact assumed demo timings. In the first live probe, longer assumed timings produced no completions during a 45-second observation window; the final generation contract uses 2–30 second initial services and explicitly labels them illustrative.
-- Snapshot storage is a bounded prototype document per session. There are no user accounts, cross-session analytics, exact replay, arbitrary meshes/code or detailed domain physics.
+- Snapshot storage is a bounded prototype document per session. There are no user accounts, cross-session analytics, arbitrary meshes/code or detailed domain physics.
 - The original team Jev endpoint remains independently deployed; application users do not need its token.

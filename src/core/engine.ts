@@ -276,6 +276,7 @@ export function createTicket(
   run: Run,
   p: Person,
 ): DecisionTicket | null {
+  if (run.status !== "running") return null;
   if (p.pending && Date.now() - p.pending.issuedAt < 25_000) return null;
   if (p.nextDecisionAt > run.time || p.presence === "exited") return null;
   const choices = choicesFor(env, run, p);

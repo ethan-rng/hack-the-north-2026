@@ -8,7 +8,7 @@ Describe a place, generate a researched low-poly world, and introduce events to 
 
 - **React / Next.js static export**, **React Three Fiber + Drei**: the 3D workspace, one-description onboarding, entity inspectors, events and sequential run comparisons.
 - **Cloudflare Worker + static assets**: the app and same-origin API in one deployment. No Next.js server is deployed.
-- **SQLite Durable Object per anonymous browser session**: authoritative state, persistence, WebSocket snapshots and one-second simulation alarms. No accounts or multiplayer editing.
+- **SQLite Durable Object per anonymous browser session**: authoritative state, persistence, WebSocket snapshots and bounded event-processing alarms and recorded timelines. No accounts or multiplayer editing.
 - **Baseten `openai/gpt-oss-120b`**: environment synthesis and event interpretation with validated structured output. Setup uses Baseten's **Exa web search server tool**, then extracts actual retrieval records before synthesis.
 - **Jev `typesafe/jev` via Cloudflare Workers AI**, using the authenticated `crowd-control` AI Gateway: individual choices from engine-generated valid actions.
 
@@ -40,7 +40,7 @@ npm run cf:types
 npm run test:e2e
 ```
 
-`test:e2e` requires the local preview, real provider credentials and Chromium (`npx playwright install chromium`). It creates isolated browser sessions and tests live research, Jev, promotion/dinosaur events, reset, comparison, and a second airport scenario. To exercise a deployed Worker, set `SMOKE_URL` to its origin. Screenshots and diagnostic state are written under `/private/tmp/crowd-*`; these artifacts are not committed. Unit tests do not call external models.
+`test:e2e` requires the local preview, real provider credentials and Chromium (`npx playwright install chromium`). It creates isolated browser sessions and tests live research, Jev, frozen initial state, promotion/dinosaur segments, playback controls, scrubbing, reset, reconnect, and a second airport scenario. To exercise a deployed Worker, set `SMOKE_URL` to its origin. Screenshots and diagnostic state are written under `/private/tmp/crowd-*`; these artifacts are not committed. Unit tests do not call external models.
 
 ## Deploy
 
@@ -53,7 +53,7 @@ Only the Baseten inference key is a Worker secret. `BASETEN_MODEL` and `AI_GATEW
 
 ## Data and engine boundaries
 
-- [src/core/types.ts](src/core/types.ts): shared contracts. [generation.ts](src/core/generation.ts): Zod validation, deterministic layout and seeded 40-person population. [engine.ts](src/core/engine.ts): authoritative state transitions, perception, queues, services, transactions and metrics.
+- [src/core/types.ts](src/core/types.ts): shared contracts. [generation.ts](src/core/generation.ts): Zod validation, deterministic layout and seeded 40-person population. [engine.ts](src/core/engine.ts): authoritative state transitions, perception, queues, services, transactions and metrics. [playback.ts](src/core/playback.ts): settled initial population, bounded processing and historical frames.
 - [cloudflare/ai.ts](cloudflare/ai.ts): provider boundaries. [cloudflare/index.ts](cloudflare/index.ts): anonymous session routing, SQLite persistence, alarms and WebSockets.
 - [src/ui/World.tsx](src/ui/World.tsx): reusable geometry and interpolated people. Presentation lives in a separate entity-ID mapping and never determines engine capabilities or goals. The entity lists and inspectors remain usable if 3D rendering fails.
 
@@ -61,7 +61,7 @@ Ground coordinates are `(x,z)` in illustrative world units; `y` is renderer heig
 
 Capabilities compose across any venue description: visit, browse, purchase, queue, receive_service, wait, rest, eat and exit. A ride or checkpoint is a **free independent timed slot**, with admission capacity separate from service slots and consumable stock. Initial service durations are compact assumed demo times (up to 30 seconds). No synchronized ride cycles or real airport screening/boarding rules are implied.
 
-Jev receives a person's goals, traits, budget, current activity, recent experiences and perceived events. It chooses only among supplied valid choices. Up to four requests are in flight per session. Navigation and services keep running while inference is pending; failures preserve activity and schedule retries. Run identity, per-person decision version, and current dependencies reject late or invalid replies. No heuristic choice is labeled as a successful model response.
+Jev receives a person's goals, traits, budget, current activity, recent experiences and perceived events. It chooses only among supplied valid choices. Up to four requests are in flight per session. During processing, virtual time waits for each due decision batch; model latency does not consume simulated seconds. Failures preserve activity and schedule retries. Run identity, per-person decision version, and current dependencies reject late or invalid replies. No heuristic choice is labeled as a successful model response.
 
 The engine commits single-item purchases synchronously: stock, current price, budget, place status and eligibility are checked at completion. The best discount applies without stacking. Transactions and completed services use idempotency keys. Noninterruptible services drain after closure or a threat; interruptible services and queue departures release membership consistently.
 
@@ -73,32 +73,37 @@ Events are interpreted by Baseten into a finite registry: discount, stock delta,
 
 Local information is learned within its radius; announcements reach the environment. Scheduled goals use a `subjectKey` such as `CC101`. A gate change updates affected passengers' knowledge and goals only when perceived. Generic services do not represent actual airline operations.
 
-Runs default to 180 simulated seconds. **Finish run** can save a shorter first run after ten seconds. **Reset baseline** restores exact initial people, goals, positions, budgets, stock, capacities, seed and research, with a new run ID. Run B automatically uses Run A's duration, and cannot finish early for comparison. Resetting an unfinished alternative discards that alternative; the saved first baseline remains. Comparisons include environment and per-place metrics, absolute differences, percentages (N/A for zero baseline), waits and intervention timings. Fresh model calls can differ across runs; this is not a causal estimate or exact replay.
+The generated population is already distributed through the venue, with initial activities and no fabricated sales. Opening the scenario makes no Jev calls and leaves everyone paused. Each event is interpreted, then the backend records exactly **30 simulated seconds** before the browser plays the result and automatically pauses. Playback supports 0.25×, 0.5×, 1×, 2× and 4× speed, pause, and forward/backward scrubbing. Inspectors and metrics follow the selected frame; playback makes no inference requests.
 
-Revise the description to generate a new independent setup. Refresh/reconnect restores the latest SQLite state. Existing runs continue to their bounded duration even if the tab disconnects. State is session-scoped to an HttpOnly cookie. Expired/missing cookies start a new session.
+New events extend the latest recorded state. Return to the end of the timeline before submitting; historical scrubbing does not branch the simulation. One event processes at a time, with up to four concurrent Jev requests and a maximum of **240 attempts per segment**. Actual usage varies with people and activity. After the call budget or 180-second processing budget is reached, existing activities complete the remaining virtual time; the segment reports the limit. Failed interpretation leaves the scene unchanged. A run supports up to 30 event submissions.
+
+**Finish run** saves the current recorded outcome. **Reset baseline** restores exact initial people, goals, positions, budgets, stock, capacities, seed and research, with a new run ID. Process the same number of 30-second segments in Runs A and B to compare equal durations; unequal durations are explicitly excluded from comparison. Resetting an unfinished alternative discards that alternative; the saved first baseline remains. Comparisons include environment and per-place metrics, absolute differences, percentages (N/A for zero baseline), waits and intervention timings. Fresh model calls can differ across runs; comparison is not a causal estimate. Replaying a recorded run reuses its saved state without new decisions.
+
+Revise the description to generate a new independent setup. Refresh/reconnect restores the latest SQLite state. An already submitted event finishes its bounded processing if the tab disconnects. Reopening restores the recording paused; no further calls occur until another event is submitted. State is session-scoped to an HttpOnly cookie. Expired/missing cookies start a new session.
 
 ## API
 
 The browser obtains an anonymous session with `GET /api/session`. Mutations use same-origin JSON requests. No provider credentials are returned.
 
-| Route              | Purpose                                                   |
-| ------------------ | --------------------------------------------------------- |
-| `GET /api/health`  | Integration configuration status (not an inference probe) |
-| `GET /api/session` | Coherent snapshot / session creation                      |
-| `GET /api/live`    | WebSocket snapshots, reconnect supported                  |
-| `POST /api/setup`  | `{ "description": "…" }`, asynchronous research/setup     |
-| `POST /api/start`  | Start frozen baseline                                     |
-| `POST /api/events` | `{ "text": "…" }`, asynchronous interpretation            |
-| `POST /api/finish` | Freeze first run or an equal-duration alternative         |
-| `POST /api/reset`  | Restore baseline and start next run                       |
+| Route                            | Purpose                                                                                                  |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `GET /api/health`                | Integration configuration status (not an inference probe)                                                |
+| `GET /api/session`               | Coherent snapshot / session creation                                                                     |
+| `GET /api/live`                  | WebSocket snapshots, reconnect supported                                                                 |
+| `POST /api/setup`                | `{ "description": "…" }`, asynchronous research/setup                                                    |
+| `POST /api/start`                | Start frozen baseline                                                                                    |
+| `POST /api/events`               | `{ "text": "…", "runId": "…", "expectedTime": 0 }`, asynchronous interpretation and 30-second processing |
+| `GET /api/recording?segmentId=…` | Completed segment frames for the current run                                                             |
+| `POST /api/finish`               | Save current recorded outcome                                                                            |
+| `POST /api/reset`                | Restore baseline and start next run                                                                      |
 
-Request bodies are bounded at 4 KiB for text-bearing mutations, event text at 1,000 characters, events at 30 per run and concurrent interpretations at two. WebSocket connections are bounded to five per session. Accepted decisions and event history are recorded; detailed most-recent Jev inputs are inspectable per person. The prototype uses a compact SQLite state document rather than a cross-session analytics database.
+Request bodies are bounded at 4 KiB for text-bearing mutations, event text at 1,000 characters, events at 30 per run and processing jobs at one. WebSocket connections are bounded to five per session. Accepted decisions and event history are recorded; accepted choices are inspectable at each recorded second. Large inference inputs are omitted from playback frames. The prototype stores current state in a SQLite document and historical frames in a separate table.
 
 ## Demo
 
-1. Describe an amusement park with two rides, a gift shop, food and rest. Review actual sources and assumptions; start the run.
-2. Select the gift shop and follow stock, checkout queues and completed purchases. Inspect a person to see goals and their actual accepted Jev choice.
-3. Finish Run A after a useful observation period (60–90 seconds), then reset. Announce a 20% shop promotion and add a service slot using free text.
+1. Describe an amusement park with two rides, a gift shop, food and rest. Review actual sources and assumptions; open the paused scenario.
+2. Submit a shop promotion. Wait for 30 simulated seconds to process, then watch playback. Pause, change speed, and scrub while inspecting a person or shop.
+3. Finish Run A after one or more event segments, then reset. Announce a promotion with an extra service slot using free text.
 4. Compare the same-duration results. Outcomes are model-dependent; no purchase lift is scripted.
 5. Reset and introduce a dinosaur in the central plaza. Inspect who perceived it and which actions Jev chose.
 6. Generate an airport with two gate zones and a timed checkpoint. Announce a new gate for journey CC101; inspect affected passengers and unrelated people.

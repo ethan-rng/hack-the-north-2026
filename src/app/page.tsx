@@ -1,5 +1,8 @@
 "use client";
 import dynamic from "next/dynamic";
+import { usePlayback } from "@/ui/usePlayback";
+import Timeline from "@/ui/Timeline";
+import { settlePopulation } from "@/core/playback";
 import {
   useEffect,
   useRef,
@@ -289,7 +292,9 @@ function PersonInspector({
             At {time(p.lastDecision.at)} · input revision{" "}
             {p.lastDecision.inputRevision}
           </small>
-          <pre>{JSON.stringify(p.lastDecision.context, null, 2)}</pre>
+          {p.lastDecision.context && (
+            <pre>{JSON.stringify(p.lastDecision.context, null, 2)}</pre>
+          )}
         </details>
       )}
     </>
@@ -446,8 +451,8 @@ function Comparison({ results, env }: { results: Result[]; env: Environment }) {
         <h2>One baseline. Two possibilities.</h2>
         <p>
           Finish your first run, then reset to restore the same people,
-          products, knowledge and starting positions. The next run uses exactly
-          the same duration.
+          products, knowledge and starting positions. Process the same number of
+          30-second event segments in each run to compare equal durations.
         </p>
       </>
     );
@@ -459,7 +464,8 @@ function Comparison({ results, env }: { results: Result[]; env: Environment }) {
       <p className="eyebrow">RUN COMPARISON</p>
       <h2>What changed?</h2>
       <p>
-        {time(a.duration)} simulated time per run · identical starting state.
+        Run A: {time(a.duration)}
+        {b ? ` · Run B: ${time(b.duration)}` : ""} · identical starting state.
         Fresh Jev choices can vary.
       </p>
       <label className="select-label">
@@ -475,7 +481,9 @@ function Comparison({ results, env }: { results: Result[]; env: Environment }) {
       </label>
       {!valid && (
         <p className="notice">
-          Run A is saved. Reset and complete Run B to compare equal durations.
+          {b
+            ? "These runs have different durations. Reset and process the same number of 30-second segments as Run A before finishing."
+            : "Run A is saved. Reset and process the same number of 30-second segments, then finish Run B to compare."}
         </p>
       )}
       <table className="comparison">
@@ -612,12 +620,14 @@ export default function Page() {
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     setPreview(
-      compileEnvironment(
-        fallbackConfiguration("Illustrative preview"),
-        "Illustrative preview",
-        [],
-        "unavailable",
-        "preview",
+      settlePopulation(
+        compileEnvironment(
+          fallbackConfiguration("Illustrative preview"),
+          "Illustrative preview",
+          [],
+          "unavailable",
+          "preview",
+        ),
       ),
     );
     let alive = true,
@@ -650,7 +660,7 @@ export default function Page() {
       .then((state) => {
         if (alive) {
           setSnapshot(state);
-          setDescription(state.setup.description);
+          setDescription((draft) => draft || state.setup.description);
           connect();
         }
       })
@@ -672,8 +682,18 @@ export default function Page() {
       socket?.close();
     };
   }, []);
+  const playback = usePlayback(snapshot);
   const env = snapshot?.environment,
-    run = snapshot?.run;
+    latestRun = snapshot?.run,
+    run = playback.run;
+  const processing = playback.processing;
+  const canSubmit =
+    !!latestRun &&
+    latestRun.status !== "finished" &&
+    !processing &&
+    !playback.playing &&
+    !playback.historical &&
+    !playback.loading;
   const generating =
     snapshot?.setup.status === "researching" ||
     snapshot?.setup.status === "building";
@@ -688,7 +708,7 @@ export default function Page() {
     try {
       const result = await api(name, data);
       if (name !== "events") setSnapshot(result);
-      return true;
+      return result;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed");
       return false;
@@ -698,6 +718,7 @@ export default function Page() {
   }
   async function generate(e: FormEvent) {
     e.preventDefault();
+    if (!snapshot) return;
     if (await command("setup", { description })) {
       setEditing(false);
       setSelected("");
@@ -705,7 +726,14 @@ export default function Page() {
   }
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (await command("events", { text })) {
+    if (!canSubmit) return;
+    const segment = await command("events", {
+      text,
+      runId: latestRun!.runId,
+      expectedTime: latestRun!.time,
+    });
+    if (segment) {
+      playback.onSubmitted(segment.id);
       setText("");
       setPanel("events");
     }
@@ -744,7 +772,11 @@ export default function Page() {
           )}
           <span className="live-badge">
             <i className={connected ? "online" : "offline"} />
-            {run?.status === "running" ? "LIVE SIMULATION" : "SCENARIO LAB"}
+            {processing
+              ? "PROCESSING"
+              : playback.playing
+                ? "RECORDED PLAYBACK"
+                : "SCENARIO PAUSED"}
           </span>
         </div>
       </header>
@@ -793,7 +825,10 @@ export default function Page() {
                   <span>
                     <Globe2 size={13} /> Grounded in live research
                   </span>
-                  <button className="primary" disabled={!!busy || generating}>
+                  <button
+                    className="primary"
+                    disabled={!snapshot || !!busy || generating}
+                  >
                     {generating ? (
                       <LoaderCircle className="spin" size={17} />
                     ) : (
@@ -873,6 +908,7 @@ export default function Page() {
         <>
           <div className={`world-pane ${!run ? "summary-world" : ""}`}>
             <World
+              key={run?.runId ?? env!.setupId}
               environment={env!}
               run={run}
               selected={selected}
@@ -884,13 +920,13 @@ export default function Page() {
                   <div className="run-chip">
                     <span className="tiny-dot" />
                     <strong>
-                      {run.status === "running"
-                        ? "Run in progress"
-                        : "Run complete"}
+                      {processing
+                        ? "Processing event"
+                        : playback.playing
+                          ? "Playing recording"
+                          : "Scenario paused"}
                     </strong>
-                    <span>
-                      {time(run.time)} / {time(run.duration)}
-                    </span>
+                    <span>{time(playback.cursor)} recorded</span>
                   </div>
                   <div className="world-actions">
                     <button
@@ -900,30 +936,62 @@ export default function Page() {
                       <Layers3 size={16} /> Compare
                     </button>
                     <button
-                      disabled={!!busy}
+                      disabled={!!busy || !!processing}
                       onClick={async () => {
                         if (await command("reset")) setPanel("entity");
                       }}
                     >
                       <RotateCcw size={15} /> Reset baseline
                     </button>
-                    {run.status === "running" && (
-                      <button
-                        disabled={
-                          !!busy ||
-                          run.time < 10 ||
-                          (!!snapshot!.results.length &&
-                            run.time < snapshot!.results[0].duration)
-                        }
-                        onClick={async () => {
-                          if (await command("finish")) setPanel("compare");
-                        }}
-                      >
-                        Finish run
-                      </button>
-                    )}
+                    {latestRun?.status !== "finished" &&
+                      latestRun &&
+                      latestRun.time > 0 && (
+                        <button
+                          disabled={
+                            !!busy ||
+                            !!processing ||
+                            playback.playing ||
+                            playback.historical
+                          }
+                          onClick={async () => {
+                            if (await command("finish")) setPanel("compare");
+                          }}
+                        >
+                          Finish run
+                        </button>
+                      )}
                   </div>
                 </div>
+                {processing && (
+                  <div className="processing-overlay" role="status">
+                    <LoaderCircle className="spin" size={26} />
+                    <h2>
+                      {processing.status === "interpreting"
+                        ? "Understanding your event"
+                        : "Processing what happens next"}
+                    </h2>
+                    <p>{processing.message}</p>
+                    <progress
+                      max={processing.duration}
+                      value={processing.ticksDone}
+                    />
+                    <small>
+                      {processing.ticksDone} / {processing.duration} simulated
+                      seconds · {processing.callsMade} / {processing.callLimit}{" "}
+                      Jev calls
+                    </small>
+                    <p className="muted">
+                      The scene stays frozen. Your recording will play when it
+                      is ready.
+                    </p>
+                  </div>
+                )}
+                {playback.loading && !processing && (
+                  <div className="recording-loading" role="status">
+                    <LoaderCircle size={16} className="spin" /> Loading recorded
+                    playback…
+                  </div>
+                )}
                 <div className="world-metrics">
                   <Metric
                     label="People inside"
@@ -945,10 +1013,10 @@ export default function Page() {
                 <div className="integration-status">
                   {run.jevAccepted} Jev choices accepted
                   {run.jevFailed > 0
-                    ? ` · ${run.jevFailed} failed, retrying`
+                    ? ` · ${run.jevFailed} failed decisions recorded`
                     : ""}{" "}
-                  ·{" "}
-                  {connected ? "Connected" : "Reconnecting; showing last state"}
+                  · {processing ? "Computing" : "Playback uses no inference"} ·{" "}
+                  {connected ? "Connected" : "Reconnecting"}
                 </div>
               </>
             )}
@@ -960,6 +1028,10 @@ export default function Page() {
                   <Check size={14} /> YOUR WORLD IS READY
                 </span>
                 <h1>{env!.name}</h1>
+                <p>
+                  People are already at their destinations. The scene stays
+                  paused until you introduce an event.
+                </p>
                 <p>{env!.summary}</p>
                 <div className="summary-stats">
                   <span>
@@ -1005,7 +1077,7 @@ export default function Page() {
                     disabled={!!busy}
                     onClick={() => command("start")}
                   >
-                    Start simulation <ArrowRight size={17} />
+                    Explore scenario <ArrowRight size={17} />
                   </button>
                 </div>
               </div>
@@ -1165,26 +1237,47 @@ export default function Page() {
                 </div>
               </aside>
               <form className="event-composer" onSubmit={submit}>
+                <Timeline
+                  playback={playback}
+                  segments={snapshot?.segments ?? []}
+                />
+                {playback.historical && !playback.playing && !processing && (
+                  <p className="timeline-note">
+                    You are viewing recorded history.{" "}
+                    <button
+                      type="button"
+                      onClick={() => playback.seek(playback.end)}
+                    >
+                      Return to latest state to add an event
+                    </button>
+                  </p>
+                )}
+                {(snapshot?.segments ?? [])
+                  .filter((s) => s.status === "failed")
+                  .slice(-1)
+                  .map((s) => (
+                    <p className="notice" role="alert" key={s.id}>
+                      {s.message}
+                    </p>
+                  ))}
                 <div className="event-prompt">
                   <Sparkles size={18} />
                   <textarea
                     ref={input}
                     aria-label="Describe an event"
                     placeholder={
-                      run.status === "running"
-                        ? "What happens next? Describe an event…"
-                        : "Run complete. Reset the baseline to try another scenario."
+                      latestRun?.status === "finished"
+                        ? "Run complete. Reset the baseline to try another scenario."
+                        : processing
+                          ? "Processing your event…"
+                          : "Describe an event to process the next 30 seconds…"
                     }
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        if (
-                          text.trim().length >= 3 &&
-                          !busy &&
-                          run.status === "running"
-                        )
+                        if (text.trim().length >= 3 && !busy && canSubmit)
                           e.currentTarget.form?.requestSubmit();
                       }
                     }}
@@ -1192,22 +1285,18 @@ export default function Page() {
                     minLength={3}
                     maxLength={1000}
                     required
-                    disabled={run.status !== "running"}
+                    disabled={!canSubmit}
                   />
                   <button
                     className="primary"
-                    disabled={
-                      !!busy ||
-                      run.status !== "running" ||
-                      text.trim().length < 3
-                    }
+                    disabled={!!busy || !canSubmit || text.trim().length < 3}
                   >
                     {busy === "events" ? (
                       <LoaderCircle className="spin" size={16} />
                     ) : (
                       <ArrowRight size={18} />
                     )}
-                    <span>Introduce event</span>
+                    <span>Process event</span>
                   </button>
                 </div>
                 <div className="event-suggestions">

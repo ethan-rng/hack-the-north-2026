@@ -37,7 +37,13 @@ try {
     }),
   );
   await client.post("/api/start");
-  const before = await waitFor((s) => s.run?.time >= 10, 25);
+  const before = await state();
+  if (
+    before.run.time !== 0 ||
+    before.run.status !== "paused" ||
+    before.run.jevAccepted !== 0
+  )
+    throw Error("Airport did not open frozen");
   const gates = env.places.filter((p) =>
     /\bgate\b/i.test([p.name, p.typeLabel, ...p.tags].join(" ")),
   );
@@ -49,9 +55,12 @@ try {
   });
   if (!response.ok()) throw Error(await response.text());
   let s = await waitFor(
-    (s) => s.run?.events[0] && s.run.events[0].status !== "interpreting",
-    25,
+    (s) => ["ready", "failed"].includes(s.segments[0]?.status),
+    190,
   );
+  if (s.segments[0].status !== "ready") throw Error(s.segments[0].message);
+  if (s.run.time !== 30 || s.run.status !== "paused")
+    throw Error("Segment did not pause at 30 seconds");
   console.log(
     JSON.stringify({
       stage: "gate-change",
@@ -68,7 +77,13 @@ try {
   );
   if (!s.run.events[0].effects.some((e) => e.kind === "goal_update"))
     throw Error("No goal update");
-  s = await waitFor((s) => s.run?.time >= 75, 90);
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  const idle = await state();
+  if (
+    idle.run.time !== s.run.time ||
+    idle.run.jevAccepted !== s.run.jevAccepted
+  )
+    throw Error("Idle airport kept running");
   const completed = env.services
     .filter((s) => s.kind === "timed")
     .reduce(
@@ -77,7 +92,7 @@ try {
     );
   console.log(
     JSON.stringify({
-      stage: "airport-live",
+      stage: "airport-recorded",
       time: s.run.time,
       decisions: s.run.jevAccepted,
       failures: s.run.jevFailed,

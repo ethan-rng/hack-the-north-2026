@@ -5,15 +5,17 @@ Delivery: Hack the North MVP, ready before hacking ends
 Team: Julian, product manager and frontend developer; two engineers focused on backend and simulation  
 Audience: The three builders and their coding agents
 
+Updated 2026-09-19: event-driven 30-second processing and recorded playback replace continuous simulation. Pause, speed controls and timeline scrubbing are required.
+
 ## 1 Product direction
 
-Build a live, low-poly 3D simulation of a populated environment described by the user. The user enters one short description. A research agent finds relevant information, fills gaps with labeled assumptions, and produces a usable environment configuration. The system generates an approximate 3D scene and a population of individual AI-controlled people.
+Build an event-driven, low-poly 3D simulation of a populated environment described by the user. The user enters one short description. A research agent finds relevant information, fills gaps with labeled assumptions, and produces a usable environment configuration. The system generates an approximate 3D scene and a population of individual AI-controlled people.
 
 Once inside, the user can type events, watch people react, click people to inspect their state, and click stores or other places to see their numbers change in a side pane. Users simulate the entire environment. They do not need to own or designate a focal business.
 
 Examples include a shopping mall, a plaza, an amusement park, an airport terminal, a market, or an unfamiliar environment assembled from the same general mechanics. The mall is a polished demonstration, not the backend's domain boundary. The product has both a practical use for exploring operational and commercial scenarios and a playful use for unusual events.
 
-Core flow: describe environment, research and generate, inspect the compact summary, start simulation, introduce events, inspect people and places, then compare sequential runs from the same baseline.
+Core flow: describe environment, research and generate, inspect the compact summary, open the paused populated scenario, introduce an event, process 30 simulated seconds, play and inspect the recorded outcome, then compare sequential runs from the same baseline.
 
 Baseten must perform meaningful runtime work, including event interpretation. It should also power the research/configuration reasoning where suitable. Jev must be accessed through Cloudflare Workers AI to choose individual people's actions. Simulation code owns authoritative movement, capacities, resources, queues, transactions, and metrics.
 
@@ -49,12 +51,13 @@ The backend's capabilities must be determined by supported simulation mechanics,
 - A research agent that uses external sources during setup, including research of a named real location where identifiable.
 - Assumptions for information that cannot be found, with provenance and visible limitations.
 - An automatically generated, valid environment configuration and low-poly 3D layout using reusable geometry and assets.
-- A compact generated summary with optional correction through the same description field and a Start simulation action.
+- A compact generated summary with optional correction through the same description field and an Explore scenario action.
 - Approximately 40 people and six to ten places as the initial performance target, configurable internally. Large real venues may be represented by a clearly disclosed subset or simplified zones.
 - Places with capability-driven interactions, including retail, waiting/gathering, rest, and generic timed services.
 - Goals, budgets where applicable, interests, patience, needs, moods, memory, and limited event awareness for individuals.
 - Free-text events beyond prepared demo phrases, supported effects, and generic visual fallbacks.
-- Main 3D pane, live person inspector, selectable places, store product/stock/revenue panes, and relevant non-retail metrics.
+- Play/pause, 0.25× through 4× speed, and a timeline that scrubs forward and backward through recorded state.
+- Main 3D pane, historical person inspector, selectable places, store product/stock/revenue panes, and relevant non-retail metrics.
 - Sequential comparison of two runs from the same generated baseline over equal simulated durations.
 - Baseten and Jev through Cloudflare Workers AI used in the running product.
 - Business scenarios followed by one chaotic dinosaur finale.
@@ -62,7 +65,6 @@ The backend's capabilities must be determined by supported simulation mechanics,
 
 ### Outside MVP
 
-- Pause, speed controls, and replay UI. Record events and accepted decisions for debugging and possible later replay.
 - Spoken announcements, voice input, ElevenLabs, heatmaps, advanced historical dashboards, and an AI campaign adviser.
 - Phone or messaging controls, multiplayer editing, accounts, and authentication.
 - A drag-and-drop scene editor, accurate multi-floor navigation, geographic reconstruction, realistic crowd physics, and arbitrary generated 3D assets.
@@ -81,7 +83,7 @@ The visible operational numbers and compact run comparison are required. An addi
 2. The user submits the description. Show short progress states such as researching, building environment, and ready.
 3. Research relevant locations or environment characteristics, synthesize a configuration, generate the scene, and validate the result.
 4. Show a compact summary: interpreted environment, included places, population size, key assumptions, and whether the layout is approximate. Put detailed source links and assumptions behind an expandable area.
-5. The user starts the simulation. They may optionally revise the original description and regenerate. No additional mandatory questions or wizard steps.
+5. The user opens the paused scenario with people already at relevant destinations, engaged in initial activities. Do not simulate arrivals or initial travel. They may optionally revise the original description and regenerate. No additional mandatory questions or wizard steps.
 
 The system must work with sparse descriptions. It should infer reasonable defaults and make the defaults discoverable rather than forcing the user to supply every operational parameter.
 
@@ -166,7 +168,7 @@ Events resolve existing place/product/person/zone references and specify start, 
 
 Each person's decision context contains its goals, resources, current activity, recent experiences, and perceived surroundings. Local events must not become instant universal knowledge. Announcements can reach the full environment; signs and visible threats have local reach.
 
-Jev chooses from presently valid actions supplied by the engine. Reconsider when people perceive an event, arrive, encounter unavailable stock or a queue, wait too long, complete an interaction, or approach a deadline. Stable activities continue while requests are pending. Urgent events may interrupt interruptible activities; normal destination choices should not oscillate every update.
+Jev chooses from presently valid actions supplied by the engine. Reconsider when people perceive an event, arrive, encounter unavailable stock or a queue, wait too long, complete an interaction, or approach a deadline. During backend processing, virtual time waits for pending decision batches while activities remain intact. Urgent events may interrupt interruptible activities; normal destination choices should not oscillate every update.
 
 A promotion changes an offer, not every person's destination. A threat creates a perceived situation, not a scripted universal outcome. Trait differences and constraints should affect what choices are available and selected.
 
@@ -351,7 +353,11 @@ Fields: `runId`, `baselineId`, `setupId`, `seed`, `initialStateSnapshot`, `submi
 
 The baseline includes the generated configuration, population, positions, budgets, products, service settings, and starting knowledge. Reset restores it without research/regeneration, clears effects/queues/transactions/metrics, and creates a new run identity. Late replies from old setup or run IDs cannot affect the new world.
 
-Fresh model calls may differ even with the same seed. Exact replay, if added later, uses recorded decisions rather than re-inference.
+Each submitted event produces exactly 30 simulated seconds of recorded state. The scene stays frozen with visible processing progress until the entire segment is ready, then plays automatically and pauses at the end. No Jev calls occur during idle time, playback or seeking. New events extend the latest state; scrubbing does not create alternate histories.
+
+Use at most four concurrent Jev requests, 240 attempts per segment, and a 180-second processing budget. If a limit is reached, finish the virtual segment using existing activities and disclose it. Failed event interpretation leaves the prior state intact. Persist frames for refresh, including positions, actions, goals, stock, budgets, services, metrics and events. Historical inspectors must not display future values.
+
+Fresh event processing may differ even with the same seed. Playback uses recorded state without re-inference. Equal-duration comparisons require the same number of 30-second segments.
 
 ## 10 Metrics and comparison
 
@@ -381,9 +387,10 @@ Engineers choose the backend framework, search provider, Baseten model, storage,
 | --- | --- |
 | Create environment from description | Setup ID, progress, research results, validated configuration, and summary. |
 | Read setup or current state | Coherent current snapshot and status. |
-| Start run | Frozen baseline and initial live population. |
-| Submit event | Lifecycle, interpretation, and activation or explained limitation. |
-| Receive updates | Person/place/event/resource/service changes and revision metadata. |
+| Start run | Frozen baseline and already situated, paused population. |
+| Submit event | Interpretation, bounded processing progress, completed 30-second recording or explained failure. |
+| Receive updates | Processing progress; completed recording and revision metadata. |
+| Play or seek recording | Historical person/place/resource state without inference. |
 | Finish run | Frozen comparison metrics. |
 | Reset baseline | New run identity with exactly restored starting configuration. |
 | Regenerate environment | New setup attempt from revised description; isolate the old setup/run. |
@@ -396,13 +403,13 @@ A refresh/reconnect can request a new snapshot. The MVP may remain single-user a
 - Use bounded research and inference concurrency, timeouts, and retries. Setup must not wait indefinitely for missing data.
 - Validate generated references, capabilities, paths, capacities, timing, stock, and budgets. Repair simple layout/configuration errors before ready status.
 - Preserve current behavior during a transient decision failure and record the failure; do not label a fallback as a successful Jev decision.
-- Do not block all people on a single inference response. Movement and animation continue independently.
+- Bound decision latency with timeouts during processing. Once a segment is ready, playback must animate independently of model requests.
 - Prevent stale actions after regeneration, reset, a newer decision, or a conflicting urgent event.
 - Make transactions and service completions idempotent, and keep queues and active assignments consistent.
 - Freeze source-derived configuration within a run. Do not let web changes alter a comparison midstream.
 - Missing assets use generic 3D fallbacks without removing operational capabilities.
 
-Suggested engineering targets: roughly 40 people at 30 FPS on the demo machine; immediate local progress after submission; first visible event response within about five seconds under normal service conditions; a bounded initial setup budget, such as 60–90 seconds, followed by a labeled partial-research fallback if needed. These are targets to benchmark, not verified promises.
+Suggested engineering targets: roughly 40 people at 30 FPS on the demo machine; immediate local progress after submission; visible processing progress immediately after submission, followed by playback when the bounded segment is complete; a bounded initial setup budget, such as 60–90 seconds, followed by a labeled partial-research fallback if needed. These are targets to benchmark, not verified promises.
 
 ## 13 Demonstration and generality checks
 
@@ -467,6 +474,10 @@ If time is tight, reduce the represented area, research breadth, number of place
 | AC18 | Finale | The dinosaur visual is connected to normal backend semantics and live person decisions. |
 | AC19 | Required integrations | Baseten and Cloudflare-mediated Jev both perform their runtime roles; secrets remain server-side. |
 | AC20 | Graceful failure | Retrieval, model, invalid configuration, and asset failures produce truthful fallbacks or clear errors without crashing the workspace. |
+| AC21 | Situated opening | People begin at relevant destinations with assumed initial activities, frozen with zero Jev calls and no arrival sequence. |
+| AC22 | Bounded event processing | Each event computes 30 simulated seconds behind a progress indicator; the visible scene stays frozen until its recording is ready. |
+| AC23 | Playback controls | Completed segments play automatically, pause at the end, and support pause/resume, slower/faster speed, and backward/forward seeking with no inference. |
+| AC24 | Historical consistency | Inspectors, budgets, stock and metrics match the selected recorded time; new events extend the latest state, and refresh restores a paused recording. |
 
 Prioritize checks for source/assumption separation, generated-layout reachability, last-unit purchase races, reusable service capacity, stale responses after regeneration/reset, and the complete onboarding-to-event experience. Verify visual performance on the presentation machine.
 
