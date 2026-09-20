@@ -248,34 +248,20 @@ describe("venue-aware generation", () => {
     });
   });
 
-  it("uses semantic building fallbacks rather than forcing unrelated styles", () => {
+  it("assigns a varied compatible styleId to every place, even without LLM input", () => {
     const env = compile(configuration("mall"));
-    const byName = (name: string) =>
-      env.presentation[env.places.find((p) => p.name === name)!.id];
-    expect(byName("Market stall").styleId).toBe("market-stall");
-    expect(byName("Rest garden").styleId).toMatch(
-      /gazebo|park-pavilion|bandstand/,
+    const styles = env.places.map((p) => env.presentation[p.id].styleId);
+    expect(styles.every((s) => typeof s === "string" && s.length > 0)).toBe(
+      true,
     );
-    // An unknown attraction can use its generic asset rather than an unrelated landmark.
-    expect(byName("Visitor service").asset).toBe("attraction");
-  });
-
-  it("propagates styleBrief onto presentation for dynamic building generation", () => {
-    const data = configuration("mall");
-    data.places[0].styleBrief =
-      "beach cabana with striped canopy on wooden posts";
-    data.places[2].styleBrief =
-      "research reactor cooling stack with a steam vent";
-    const env = compile(data);
-    const withBrief = env.places
-      .map((p) => env.presentation[p.id].styleBrief)
-      .filter(Boolean);
-    expect(withBrief).toHaveLength(2);
-    expect(withBrief[0]).toContain("cabana");
-    // customPrimitives is populated separately by the worker; compile alone should not set it.
-    expect(
-      env.places.every((p) => !env.presentation[p.id].customPrimitives),
-    ).toBe(true);
+    // Diversity: fewer than half the places may share the same style.
+    const counts = new Map<string, number>();
+    for (const s of styles as string[])
+      counts.set(s, (counts.get(s) ?? 0) + 1);
+    const maxRepeats = Math.max(...counts.values());
+    expect(maxRepeats).toBeLessThanOrEqual(
+      Math.max(1, Math.floor(env.places.length / 2)),
+    );
   });
 
   it("keeps future groups absent until their scheduled arrival and preserves them on reset", () => {

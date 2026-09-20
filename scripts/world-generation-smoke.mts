@@ -25,19 +25,16 @@ const mime: Record<string, string> = {
   ".txt": "text/plain",
 };
 try {
-  const scenarios: { kind: VenueKind; label: string; description: string }[] = [
-    { kind: "airport", label: "airport", description: "A modern airport terminal" },
-    { kind: "mall", label: "mall", description: "An indoor shopping mall" },
-    { kind: "neighborhood", label: "neighborhood", description: "A historic brick neighborhood" },
-    { kind: "park", label: "park", description: "A landscaped public park" },
-    { kind: "small_venue", label: "small_venue", description: "An indoor cafe" },
-    { kind: "neighborhood", label: "coastal", description: "A tropical coastal shopping street with palms" },
-    { kind: "neighborhood", label: "timber", description: "A rural alpine timber village" },
-  ];
-  for (const { kind, label, description } of scenarios) {
-    const data = fallbackConfiguration(description);
+  for (const kind of [
+    "airport",
+    "mall",
+    "neighborhood",
+    "park",
+    "small_venue",
+  ] as VenueKind[]) {
+    const data = fallbackConfiguration(`An illustrative ${kind}`);
     data.venueKind = kind;
-    data.name = `Appearance check: ${label}`;
+    data.name = `Layout check: ${kind}`;
     data.places[0].styleId = "terminal-modern";
     data.places[1].styleId = "cafe";
     if (kind === "airport") {
@@ -47,7 +44,7 @@ try {
       data.places[5].styleId = "jetbridge";
     }
     const environment = settlePopulation(
-      compileEnvironment(data, description, [], "unavailable", label),
+      compileEnvironment(data, data.name, [], "unavailable", kind),
     );
     const state: SessionSnapshot = {
       setup: {
@@ -111,10 +108,10 @@ try {
       0,
     );
     assert.deepEqual(errors, []);
-    await page.screenshot({ path: `/private/tmp/crowd-world-${label}.png` });
+    await page.screenshot({ path: `/private/tmp/crowd-world-${kind}.png` });
     console.log(
       JSON.stringify({
-        venue: label,
+        venue: kind,
         canvas: true,
         people: environment.population.length,
         pendingArrivals: environment.population.filter(

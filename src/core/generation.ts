@@ -1,16 +1,11 @@
-import {
-  visualContextSchema,
-  resolveVisualContext,
-  facadeColor,
-} from "./visualContext";
 import { z } from "zod";
 import { spatialLayout, supportedEvidence } from "./spatial";
 import { contextualPopulation } from "./population";
-import { pickStyleId, styleIds } from "./styleCatalog";
+import { pickStyleId, styleFor, styleIds } from "./styleCatalog";
 
 const evidenceSchema = z.object({
   sourceIds: z.array(z.string().max(30)).min(1).max(5),
-  quote: z.string().min(1).max(1200),
+  quote: z.string().min(1).max(600),
 });
 import {
   capabilities,
@@ -24,18 +19,17 @@ import {
 } from "./types";
 
 export const generatedSchema = z.object({
-  visualContext: visualContextSchema.optional(),
   venueKind: z
     .enum(["airport", "mall", "neighborhood", "park", "small_venue", "generic"])
     .optional(),
   name: z.string().min(1).max(100),
-  summary: z.string().max(1200),
-  coverage: z.string().max(1200),
-  assumptions: z.array(z.string().max(800)).max(24),
+  summary: z.string().max(600),
+  coverage: z.string().max(600),
+  assumptions: z.array(z.string().max(400)).max(16),
   places: z
     .array(
       z.object({
-        zone: z.string().max(120).optional(),
+        zone: z.string().max(60).optional(),
         footprint: z
           .object({
             width: z.number().min(4).max(24),
@@ -69,23 +63,23 @@ export const generatedSchema = z.object({
           )
           .max(12)
           .optional(),
-        name: z.string().min(1).max(160),
-        typeLabel: z.string().max(100),
-        description: z.string().max(600),
-        tags: z.array(z.string().max(50)).max(12),
+        name: z.string().min(1).max(80),
+        typeLabel: z.string().max(60),
+        description: z.string().max(240),
+        tags: z.array(z.string().max(30)).max(6),
         capabilities: z.array(z.enum(capabilities)).min(1).max(9),
         capacity: z.number().int().min(1).max(100),
         products: z
           .array(
             z.object({
-              name: z.string().max(100),
-              category: z.string().max(60),
+              name: z.string().max(60),
+              category: z.string().max(30),
               priceCents: z.number().int().min(0).max(100000),
               stock: z.number().int().min(0).max(1000),
             }),
           )
           .max(3),
-        serviceLabel: z.string().max(120),
+        serviceLabel: z.string().max(70),
         serviceSeconds: z.number().int().min(2).max(30),
         serviceSlots: z.number().int().min(1).max(10),
         interruptible: z.boolean(),
@@ -100,17 +94,16 @@ export const generatedSchema = z.object({
           "parking_garage",
         ]),
         sourceIds: z.array(z.string().max(30)).max(5),
-        evidenceNote: z.string().max(800),
-        operatingHours: z.string().max(160).optional(),
-        permit: z.string().max(160).optional(),
-        accessibility: z.string().max(240).optional(),
-        capacityNote: z.string().max(240).optional(),
-        address: z.string().max(240).optional(),
+        evidenceNote: z.string().max(400),
+        operatingHours: z.string().max(80).optional(),
+        permit: z.string().max(80).optional(),
+        accessibility: z.string().max(120).optional(),
+        capacityNote: z.string().max(120).optional(),
+        address: z.string().max(120).optional(),
         parkingSpots: z.number().int().min(0).max(9999).optional(),
-        amenities: z.array(z.string().max(80)).max(12).optional(),
+        amenities: z.array(z.string().max(40)).max(8).optional(),
         styleId: z.enum(styleIds).optional(),
-        styleBrief: z.string().min(8).max(500).optional(),
-        competitorOf: z.string().max(80).optional(),
+        competitorOf: z.string().max(40).optional(),
       }),
     )
     .min(6)
@@ -358,11 +351,6 @@ export function compileEnvironment(
     graphLayout(data.places.length, indexedConnections, seed),
   );
   const layout = spatial.places;
-  const visualContext = resolveVisualContext(
-    description,
-    spatial.info.venueKind,
-    data.visualContext,
-  );
   const provenance: Provenance[] = [
     {
       targetPath: "description",
@@ -391,7 +379,6 @@ export function compileEnvironment(
     assumptions: [
       ...data.assumptions,
       ...spatial.info.notes,
-      "Architecture, materials and background scenery are illustrative interpretations of the setting, not measured replicas.",
       "Population cohorts and arrival schedules are synthetic; budgets, prices, stock, capacity, service times and preferences are assumed. Groups share purposes but make individual decisions.",
       "Free non-retail services use independent timed slots. No synchronized rides, screening or boarding rules.",
       "Results illustrate this scenario; they do not forecast real sales or evacuation safety.",
@@ -402,7 +389,6 @@ export function compileEnvironment(
     services: [],
     exit: spatial.exit,
     layout: spatial.info,
-    visualContext,
     population: [],
     presentation: {},
   };
@@ -446,27 +432,24 @@ export function compileEnvironment(
       geographic,
       ...(Object.keys(details).length ? { details } : {}),
     });
-    const chosenStyle = pickStyleId(
-      input.asset,
-      seed,
-      index,
-      input.name,
-      usedStyles,
-      {
-        typeLabel: input.typeLabel,
-        description: input.description,
-        tags: input.tags,
-        setting: visualContext.setting,
-        architecture: visualContext.architecture,
-        preferred: input.styleId,
-      },
-    );
+    let chosenStyle: string | undefined = undefined;
+    const supplied = input.styleId ? styleFor(input.styleId) : undefined;
+    if (supplied && supplied.assets.includes(input.asset)) {
+      chosenStyle = supplied.id;
+    } else {
+      chosenStyle = pickStyleId(
+        input.asset,
+        seed,
+        index,
+        input.name,
+        usedStyles,
+      );
+    }
     if (chosenStyle) usedStyles.add(chosenStyle);
     env.presentation[id] = {
-      color: facadeColor(visualContext, index),
+      color: colors[index % colors.length],
       asset: input.asset,
       ...(chosenStyle ? { styleId: chosenStyle } : {}),
-      ...(input.styleBrief ? { styleBrief: input.styleBrief.trim() } : {}),
     };
     input.products.forEach((product, i) =>
       env.products.push({

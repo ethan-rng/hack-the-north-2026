@@ -122,11 +122,7 @@ export const styleCatalog: StyleEntry[] = [
   { id: "stadium", category: "attraction", assets: ["attraction"] },
   { id: "arena", category: "attraction", assets: ["attraction", "building"] },
   { id: "gym", category: "commercial", assets: ["building"] },
-  {
-    id: "swimming-pool",
-    category: "attraction",
-    assets: ["attraction", "rest"],
-  },
+  { id: "swimming-pool", category: "attraction", assets: ["attraction", "rest"] },
   { id: "bowling-alley", category: "commercial", assets: ["building"] },
   {
     id: "tennis-court",
@@ -162,9 +158,7 @@ export function styleFor(id: string): StyleEntry | undefined {
 export function candidatesForAsset(asset: string): StyleEntry[] {
   const bucket = asset as StyleAssetBucket;
   const matches = styleCatalog.filter((s) => s.assets.includes(bucket));
-  return matches.length
-    ? matches
-    : styleCatalog.filter((s) => s.assets.includes("building"));
+  return matches.length ? matches : styleCatalog.filter((s) => s.assets.includes("building"));
 }
 
 // Simple deterministic 32-bit hash from a string. Cheap and stable across runs.
@@ -177,117 +171,21 @@ function hash(input: string): number {
   return h >>> 0;
 }
 
-// Semantic compatibility wins over novelty: repeated cafes should still be cafes.
-export interface StyleContext {
-  typeLabel?: string;
-  description?: string;
-  tags?: string[];
-  setting?: string;
-  architecture?: string;
-  preferred?: string;
-}
+// Pick one styleId for a place, preferring styles not yet used in this
+// environment. Deterministic on (asset, seed, place index, place name).
 export function pickStyleId(
   asset: string,
   seed: number,
   index: number,
   placeName: string,
   used: Set<string>,
-  context: StyleContext = {},
 ): string {
-  if (asset === "parking_lot") return ""; // Render the dedicated surface lot, never a random building.
-  const text = [placeName, context.typeLabel, ...(context.tags ?? [])]
-    .join(" ")
-    .toLowerCase();
-  const rules: [RegExp, string[]][] = [
-    [/control tower|\batc\b/, ["control-tower"]],
-    [/hangar/, ["hangar"]],
-    [/jetbridge/, ["jetbridge"]],
-    [/\bgate\b|boarding/, ["airport-gate", "jetbridge"]],
-    [
-      /terminal|baggage|check.in|security|customs|arrivals|departures|lounge/,
-      ["terminal-modern", "terminal-classic"],
-    ],
-    [/parking|garage/, ["parking-garage"]],
-    [/food truck/, ["food-truck"]],
-    [/coffee|caf[eé]|espresso/, ["cafe"]],
-    [/bakery|bread|pastry/, ["bakery"]],
-    [/restaurant|dining|bistro/, ["restaurant"]],
-    [/food|snack|burger|taco/, ["fast-food", "restaurant"]],
-    [/book/, ["bookstore"]],
-    [/gift|souvenir/, ["gift-shop"]],
-    [/kiosk|counter|service desk|welcome/, ["kiosk"]],
-    [/market|stall/, ["market-stall", "corner-shop"]],
-    [/ferris/, ["ferris-wheel"]],
-    [/carousel/, ["carousel"]],
-    [/coaster/, ["coaster-station"]],
-    [/cinema|movie/, ["cinema"]],
-    [/hotel/, ["hotel"]],
-    [/hospital|clinic/, ["hospital"]],
-    [/school/, ["school"]],
-    [/library/, ["library"]],
-    [/museum/, ["museum"]],
-    [/cathedral/, ["cathedral"]],
-    [/mosque/, ["mosque"]],
-    [/church|chapel/, ["chapel"]],
-    [/warehouse|cargo|logistics/, ["cargo-warehouse", "warehouse"]],
-    [/factory|industrial/, ["factory-sawtooth", "warehouse"]],
-    [
-      /office|corporate|skyscraper/,
-      ["office-tower", "glass-tower", "modern-box"],
-    ],
-    [
-      /house|home|residen/,
-      context.architecture === "historic"
-        ? ["row-house", "brick-house", "townhouse"]
-        : context.architecture === "timber"
-          ? ["cabin", "cottage"]
-          : ["townhouse", "villa", "row-house"],
-    ],
-    [/rest|garden|plaza|gathering/, ["gazebo", "park-pavilion", "bandstand"]],
-  ];
-  const compatible = candidatesForAsset(asset);
-  const semantic = rules.find(([pattern]) => pattern.test(text))?.[1];
-  const safeDefaults =
-    asset === "gate"
-      ? ["airport-gate", "jetbridge"]
-      : asset === "rest" || asset === "open"
-        ? ["gazebo", "park-pavilion"]
-        : asset === "attraction"
-          ? ["arcade", "park-pavilion"]
-          : asset === "stall"
-            ? ["kiosk", "market-stall"]
-            : context.architecture === "historic"
-              ? ["corner-shop", "brick-house", "row-house"]
-              : context.architecture === "industrial"
-                ? ["warehouse", "modern-box"]
-                : context.architecture === "timber"
-                  ? ["cabin", "cottage"]
-                  : ["modern-box", "corner-shop", "modern-cube"];
-  // Use a named landmark from the catalog when it matches the literal place type.
-  const literal = compatible.find((style) =>
-    text.includes(style.id.replaceAll("-", " ")),
-  );
-  const ids = literal && !semantic ? [literal.id] : (semantic ?? safeDefaults);
-  let pool = ids
-    .map(styleFor)
-    .filter(
-      (style): style is StyleEntry =>
-        !!style && style.assets.includes(asset as StyleAssetBucket),
-    );
-  if (!pool.length)
-    pool = safeDefaults
-      .map(styleFor)
-      .filter(
-        (style): style is StyleEntry =>
-          !!style && style.assets.includes(asset as StyleAssetBucket),
-      );
-  if (!pool.length) return "";
-  if (context.preferred && pool.some((style) => style.id === context.preferred))
-    return context.preferred;
-  const start = hash(`${seed}|${index}|${placeName}|${asset}`) % pool.length;
-  const rotated = Array.from(
-    { length: pool.length },
-    (_, offset) => pool[(start + offset) % pool.length],
-  );
-  return (rotated.find((style) => !used.has(style.id)) ?? rotated[0]).id;
+  const pool = candidatesForAsset(asset);
+  const key = `${seed}|${index}|${placeName}|${asset}`;
+  const start = hash(key) % pool.length;
+  for (let offset = 0; offset < pool.length; offset++) {
+    const candidate = pool[(start + offset) % pool.length];
+    if (!used.has(candidate.id)) return candidate.id;
+  }
+  return pool[start].id;
 }

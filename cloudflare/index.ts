@@ -1,8 +1,3 @@
-import {
-  buildingDesignContext,
-  scenePalette,
-  resolveVisualContext,
-} from "../src/core/visualContext";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 import {
@@ -19,20 +14,13 @@ import {
   settlePopulation,
 } from "../src/core/playback";
 import type {
-  Environment,
   Event,
   Recording,
   ReplayFrame,
   Run,
   SessionSnapshot,
 } from "../src/core/types";
-import {
-  decide,
-  generateBuilding,
-  interpretEvent,
-  researchEnvironment,
-  type AIEnv,
-} from "./ai";
+import { decide, interpretEvent, researchEnvironment, type AIEnv } from "./ai";
 
 interface Bindings extends AIEnv {
   SESSIONS: DurableObjectNamespace<SimulationSession>;
@@ -40,13 +28,6 @@ interface Bindings extends AIEnv {
 }
 interface StoredSession extends SessionSnapshot {
   job?: { segmentId: string; working: Run };
-}
-const DEFAULT_SETUP_TIMEOUT_MS = 180000;
-function setupTimeoutMs(env: AIEnv) {
-  const parsed = Number(env.WORLD_GENERATION_TIMEOUT_MS);
-  return Number.isFinite(parsed) && parsed >= 90000 && parsed <= 300000
-    ? parsed
-    : DEFAULT_SETUP_TIMEOUT_MS;
 }
 const initial = (): StoredSession => ({
   setup: { id: "", status: "idle", description: "", message: "", startedAt: 0 },
@@ -79,107 +60,6 @@ export class SimulationSession extends DurableObject<Bindings> {
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS frames (run_id TEXT NOT NULL, segment_id TEXT NOT NULL, time INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(run_id, segment_id, time))",
     );
-    ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS building_cache (hash TEXT PRIMARY KEY, primitives TEXT NOT NULL, generated_at INTEGER NOT NULL)",
-    );
-  }
-  private normalizeBrief(brief: string): string {
-    return brief.trim().replace(/\s+/g, " ").toLowerCase();
-  }
-  private async hashBrief(brief: string): Promise<string> {
-    const bytes = new TextEncoder().encode(this.normalizeBrief(brief));
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
-    return Array.from(new Uint8Array(digest), (b) =>
-      b.toString(16).padStart(2, "0"),
-    ).join("");
-  }
-  private readBuildingCache(hash: string): unknown[] | undefined {
-    const row = this.ctx.storage.sql
-      .exec<{ primitives: string }>(
-        "SELECT primitives FROM building_cache WHERE hash=?",
-        hash,
-      )
-      .toArray()[0];
-    if (!row) return undefined;
-    try {
-      return JSON.parse(row.primitives) as unknown[];
-    } catch {
-      return undefined;
-    }
-  }
-  private writeBuildingCache(hash: string, primitives: unknown[]) {
-    this.ctx.storage.sql.exec(
-      "INSERT INTO building_cache(hash,primitives,generated_at) VALUES(?,?,?) ON CONFLICT(hash) DO UPDATE SET primitives=excluded.primitives, generated_at=excluded.generated_at",
-      hash,
-      JSON.stringify(primitives),
-      Date.now(),
-    );
-  }
-  private async resolveCustomBuildings(environment: Environment) {
-    const targets: { placeId: string; brief: string }[] = [];
-    for (const [placeId, presentation] of Object.entries(
-      environment.presentation,
-    )) {
-      const brief = presentation?.styleBrief;
-      if (typeof brief === "string" && brief.length >= 8)
-        targets.push({ placeId, brief });
-    }
-    if (!targets.length) return;
-    // Cap generation to protect the setup budget. Extras stay on their fallback styleId.
-    const limit = 4;
-    const scope = targets.slice(0, limit);
-    // Content-address each brief so identical descriptions across places (or
-    // sessions inside this DO) don't pay the LLM cost twice.
-    const contexts = scope.map((target) =>
-      buildingDesignContext(environment, target.placeId),
-    );
-    const colors = scenePalette(
-      environment.visualContext ??
-        resolveVisualContext(
-          environment.description,
-          environment.layout?.venueKind,
-        ),
-    );
-    const palette = [
-      colors.wall,
-      colors.roof,
-      colors.trim,
-      colors.glass,
-      colors.paving,
-    ];
-    const hashes = await Promise.all(
-      scope.map((target, index) =>
-        this.hashBrief(
-          JSON.stringify({
-            brief: target.brief,
-            context: contexts[index],
-            palette,
-          }),
-        ),
-      ),
-    );
-    const results = await Promise.all(
-      scope.map(async ({ brief }, index) => {
-        const hash = hashes[index];
-        const cached = this.readBuildingCache(hash);
-        if (cached) return cached;
-        const generated = await generateBuilding(
-          this.env,
-          brief,
-          palette,
-          contexts[index],
-        );
-        if (!generated) return undefined;
-        this.writeBuildingCache(hash, generated.primitives);
-        return generated.primitives as unknown[];
-      }),
-    );
-    for (let i = 0; i < scope.length; i++) {
-      const primitives = results[i];
-      if (!primitives) continue;
-      const target = environment.presentation[scope[i].placeId];
-      if (target) target.customPrimitives = primitives;
-    }
   }
   private load(): StoredSession {
     const row = this.ctx.storage.sql
@@ -255,12 +135,11 @@ export class SimulationSession extends DurableObject<Bindings> {
     };
     this.ctx.storage.sql.exec("DELETE FROM frames");
     this.save(state);
-    await this.ctx.storage.setAlarm(Date.now() + setupTimeoutMs(this.env));
+    await this.ctx.storage.setAlarm(Date.now() + 110000);
     this.ctx.waitUntil(this.build(description, state.setup.id));
     return this.publicState(state);
   }
   private async build(description: string, setupId: string) {
-    const startedAt = Date.now();
     try {
       const environment = await researchEnvironment(
         this.env,
@@ -275,35 +154,13 @@ export class SimulationSession extends DurableObject<Bindings> {
           this.save(state);
         },
       );
-      const stateBefore = this.load();
-      if (
-        stateBefore.setup.id !== setupId ||
-        stateBefore.setup.status === "failed"
-      )
-        return;
-      // Surface progress so a slow custom-building step doesn't look like a stall.
-      stateBefore.setup.message =
-        "Sketching custom buildings for the unusual places…";
-      this.save(stateBefore);
-      await this.resolveCustomBuildings(environment);
       const state = this.load();
       if (state.setup.id !== setupId || state.setup.status === "failed") return;
       state.environment = settlePopulation(environment);
       state.setup.status = "ready";
       state.setup.message = "Your populated scenario is ready";
       this.save(state);
-      console.info("[setup] completed", {
-        setupId,
-        elapsedMs: Date.now() - startedAt,
-        placeCount: state.environment.places.length,
-        researchStatus: state.environment.researchStatus,
-      });
-    } catch (error) {
-      console.error("[setup] failed", {
-        setupId,
-        elapsedMs: Date.now() - startedAt,
-        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-      });
+    } catch {
       const state = this.load();
       if (state.setup.id !== setupId) return;
       state.setup.status = "failed";
@@ -453,15 +310,10 @@ export class SimulationSession extends DurableObject<Bindings> {
     const state = this.load();
     if (
       ["researching", "building"].includes(state.setup.status) &&
-      Date.now() - state.setup.startedAt >= setupTimeoutMs(this.env) - 5000
+      Date.now() - state.setup.startedAt >= 105000
     ) {
       state.setup.status = "failed";
       state.setup.message = "Setup exceeded its time budget. Please retry.";
-      console.warn("[setup] exceeded time budget", {
-        setupId: state.setup.id,
-        elapsedMs: Date.now() - state.setup.startedAt,
-        timeoutMs: setupTimeoutMs(this.env),
-      });
       this.save(state);
       return;
     }
@@ -572,27 +424,8 @@ export default {
           status: "ok",
           research: "Baseten + Exa, with Claude web-search fallback",
           decisions: "Cloudflare Workers AI / typesafe/jev",
-          worldGenerationProvider: env.WORLD_GENERATION_PROVIDER ?? "auto",
-          worldSynthesisModel:
-            env.ANTHROPIC_SYNTHESIS_MODEL ?? "claude-sonnet-4-6",
-          setupTimeoutMs: setupTimeoutMs(env),
           configured: !!env.BASETEN_API_KEY || !!env.ANTHROPIC_API_KEY,
         });
-      // Exploratory: generate one low-poly building from a short brief. Not
-      // rate-limited or cached yet; only wired for the /dev/custom scratch page.
-      if (url.pathname === "/api/dev/building" && request.method === "POST") {
-        const { brief, palette } = z
-          .object({
-            brief: z.string().trim().min(4).max(300),
-            palette: z.array(z.string().max(9)).max(6).optional(),
-          })
-          .parse(await body(request));
-        const result = await generateBuilding(env, brief, palette);
-        return json(
-          result ?? { error: "Building generation failed validation" },
-          result ? 200 : 502,
-        );
-      }
       let session = request.headers
         .get("Cookie")
         ?.match(/(?:^|;\s*)cc_session=([a-f0-9]{64})(?:;|$)/)?.[1];

@@ -21,19 +21,8 @@ import type { Environment, Person, Place, Run } from "@/core/types";
 
 const DEFAULT_ZOOM_PERCENT = 175;
 import { placeOpen, occupancy } from "@/core/engine";
-import {
-  BuildingModel,
-  footprintBounds,
-  type Primitive,
-} from "@/ui/buildings/primitives";
+import { BuildingModel, footprintBounds } from "@/ui/buildings/primitives";
 import { stylesById } from "@/ui/buildings/styles";
-import SettingBackdrop from "@/ui/SettingBackdrop";
-import {
-  resolveVisualContext,
-  scenePalette,
-  type VisualContext,
-} from "@/core/visualContext";
-import { contextualPrimitives } from "@/ui/buildings/contextual";
 import { daylightBackgroundForProgress } from "@/ui/daylight";
 
 export type HeatMode = "off" | "traffic" | "occupancy" | "revenue" | "wait";
@@ -162,13 +151,11 @@ function Road({
   from,
   to,
   weight = 1,
-  color,
   mars = false,
 }: {
   from: [number, number];
   to: [number, number];
   weight?: number;
-  color?: string;
   mars?: boolean;
 }) {
   const dx = to[0] - from[0];
@@ -182,36 +169,20 @@ function Road({
       <Box
         position={[0, 0, 0]}
         scale={[length, 0.1, 1.25 - weight * 0.08]}
-        color={
-          color ??
-          (mars
-            ? weight === 3
-              ? "#9b7867"
-              : "#c39176"
-            : weight === 3
-              ? "#e8dec9"
-              : "#f7eedc")
-        }
+        color={mars ? (weight === 3 ? "#9b7867" : "#c39176") : weight === 3 ? "#e8dec9" : "#f7eedc"}
       />
     </group>
   );
 }
 function Building({
   place,
-  context,
   appearance,
   selected,
   closed,
   onSelect,
 }: {
   place: Place;
-  context: VisualContext;
-  appearance: {
-    color: string;
-    asset: string;
-    styleId?: string;
-    customPrimitives?: unknown[];
-  };
+  appearance: { color: string; asset: string; styleId?: string };
   selected: boolean;
   closed: boolean;
   onSelect: () => void;
@@ -223,38 +194,11 @@ function Building({
       place.entry.z - place.position.z,
     );
   const style = appearance.styleId ? stylesById[appearance.styleId] : undefined;
-  const primitives = useMemo<Primitive[] | undefined>(() => {
-    if (
-      Array.isArray(appearance.customPrimitives) &&
-      appearance.customPrimitives.length
-    )
-      return contextualPrimitives(
-        appearance.customPrimitives as Primitive[],
-        context,
-        appearance.color,
-        appearance.styleId,
-        true,
-      );
-    const base = style?.build({
-      color: closed ? "#a9aaa3" : appearance.color,
-      closed,
-    });
-    return base
-      ? contextualPrimitives(
-          base,
-          context,
-          closed ? "#a9aaa3" : appearance.color,
-          appearance.styleId,
-        )
-      : undefined;
-  }, [
-    appearance.customPrimitives,
-    appearance.styleId,
-    style,
-    closed,
-    appearance.color,
-    context,
-  ]);
+  const primitives = useMemo(
+    () =>
+      style?.build({ color: closed ? "#a9aaa3" : appearance.color, closed }),
+    [style, closed, appearance.color],
+  );
   const bounds = useMemo(
     () =>
       primitives
@@ -276,7 +220,7 @@ function Building({
       <Box
         position={[0, 0.12, 0]}
         scale={[width, 0.24, depth]}
-        color={selected ? "#203e48" : scenePalette(context).paving}
+        color={selected ? "#203e48" : "#d7dac9"}
       />
       <group scale={[width / bounds.width, 1, depth / bounds.depth]}>
         <group position={[-bounds.x, 0, -bounds.z]}>
@@ -498,16 +442,16 @@ function Walker({
     person.currentAction?.type === "socialize"
       ? { Icon: MessageCircle, label: "Chatting with peers", tone: "social" }
       : person.mood === "frightened" || person.stress >= 0.75
-        ? { Icon: TriangleAlert, label: "Afraid", tone: "danger" }
-        : person.hunger >= 0.55
-          ? { Icon: Utensils, label: "Hungry", tone: "need" }
-          : person.fatigue >= 0.75
-            ? { Icon: BatteryLow, label: "Exhausted", tone: "warn" }
-            : person.mood === "frustrated"
-              ? { Icon: Frown, label: "Frustrated", tone: "warn" }
-              : person.mood === "pleased" || person.mood === "happy"
-                ? { Icon: Smile, label: "Happy", tone: "positive" }
-                : null;
+      ? { Icon: TriangleAlert, label: "Afraid", tone: "danger" }
+      : person.hunger >= 0.55
+        ? { Icon: Utensils, label: "Hungry", tone: "need" }
+        : person.fatigue >= 0.75
+          ? { Icon: BatteryLow, label: "Exhausted", tone: "warn" }
+          : person.mood === "frustrated"
+            ? { Icon: Frown, label: "Frustrated", tone: "warn" }
+            : person.mood === "pleased" || person.mood === "happy"
+              ? { Icon: Smile, label: "Happy", tone: "positive" }
+              : null;
   const StateIcon = state?.Icon;
   const group = useRef<Group>(null);
   useFrame(({ clock }) => {
@@ -533,32 +477,12 @@ function Walker({
           </mesh>
           <mesh castShadow position={[0, 1.15, 0]}>
             <sphereGeometry args={[0.31, 16, 12]} />
-            <meshStandardMaterial
-              color="#b8e1ea"
-              metalness={0.35}
-              roughness={0.2}
-            />
+            <meshStandardMaterial color="#b8e1ea" metalness={0.35} roughness={0.2} />
           </mesh>
-          <Box
-            position={[0, 0.58, -0.24]}
-            scale={[0.38, 0.52, 0.18]}
-            color="#6d8496"
-          />
-          <Box
-            position={[0, 0.64, 0.3]}
-            scale={[0.34, 0.32, 0.12]}
-            color={color}
-          />
-          <Box
-            position={[-0.16, 0.12, 0]}
-            scale={[0.12, 0.34, 0.14]}
-            color="#c7d0d7"
-          />
-          <Box
-            position={[0.16, 0.12, 0]}
-            scale={[0.12, 0.34, 0.14]}
-            color="#c7d0d7"
-          />
+          <Box position={[0, 0.58, -0.24]} scale={[0.38, 0.52, 0.18]} color="#6d8496" />
+          <Box position={[0, 0.64, 0.3]} scale={[0.34, 0.32, 0.12]} color={color} />
+          <Box position={[-0.16, 0.12, 0]} scale={[0.12, 0.34, 0.14]} color="#c7d0d7" />
+          <Box position={[0.16, 0.12, 0]} scale={[0.12, 0.34, 0.14]} color="#c7d0d7" />
         </>
       ) : (
         <>
@@ -570,11 +494,7 @@ function Walker({
             <icosahedronGeometry args={[0.23, 1]} />
             <meshStandardMaterial color="#edc9a7" />
           </mesh>
-          <Box
-            position={[0, 0.1, 0]}
-            scale={[0.28, 0.3, 0.28]}
-            color="#425568"
-          />
+          <Box position={[0, 0.1, 0]} scale={[0.28, 0.3, 0.28]} color="#425568" />
         </>
       )}
       {state && StateIcon && (
@@ -650,7 +570,15 @@ function SafehouseSignal({ x, z }: { x: number; z: number }) {
     </group>
   );
 }
-function Alien({ x, z, scale = 1 }: { x: number; z: number; scale?: number }) {
+function Alien({
+  x,
+  z,
+  scale = 1,
+}: {
+  x: number;
+  z: number;
+  scale?: number;
+}) {
   return (
     <group position={[x, 0, z]} scale={[scale, scale, scale]}>
       <mesh castShadow position={[0, 2.5, 0]}>
@@ -664,20 +592,11 @@ function Alien({ x, z, scale = 1 }: { x: number; z: number; scale?: number }) {
       {[-0.48, 0.48].map((side) => (
         <mesh key={side} position={[side, 4.7, 0.88]}>
           <sphereGeometry args={[0.16, 10, 8]} />
-          <meshStandardMaterial
-            color="#ffdb63"
-            emissive="#d86a31"
-            emissiveIntensity={1.6}
-          />
+          <meshStandardMaterial color="#ffdb63" emissive="#d86a31" emissiveIntensity={1.6} />
         </mesh>
       ))}
       {[-1, 1].map((side) => (
-        <mesh
-          key={side}
-          castShadow
-          position={[side * 1.15, 2.75, 0]}
-          rotation={[0, 0, side * 0.45]}
-        >
+        <mesh key={side} castShadow position={[side * 1.15, 2.75, 0]} rotation={[0, 0, side * 0.45]}>
           <capsuleGeometry args={[0.18, 1.5, 6, 10]} />
           <meshStandardMaterial color="#708b59" />
         </mesh>
@@ -702,35 +621,18 @@ function AlienArrival({
       <group position={[0, height, 0]}>
         <mesh castShadow>
           <cylinderGeometry args={[3.4, 4.4, 0.65, 32]} />
-          <meshStandardMaterial
-            color="#48536a"
-            metalness={0.75}
-            roughness={0.25}
-          />
+          <meshStandardMaterial color="#48536a" metalness={0.75} roughness={0.25} />
         </mesh>
         <mesh castShadow position={[0, 0.62, 0]}>
-          <sphereGeometry
-            args={[2.3, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]}
-          />
-          <meshStandardMaterial
-            color="#87b6cf"
-            metalness={0.6}
-            roughness={0.18}
-          />
+          <sphereGeometry args={[2.3, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color="#87b6cf" metalness={0.6} roughness={0.18} />
         </mesh>
         {Array.from({ length: 10 }, (_, index) => {
           const angle = (index / 10) * Math.PI * 2;
           return (
-            <mesh
-              key={index}
-              position={[Math.cos(angle) * 3.7, 0, Math.sin(angle) * 3.7]}
-            >
+            <mesh key={index} position={[Math.cos(angle) * 3.7, 0, Math.sin(angle) * 3.7]}>
               <sphereGeometry args={[0.12, 8, 6]} />
-              <meshStandardMaterial
-                color="#e6c45e"
-                emissive="#f4953f"
-                emissiveIntensity={1.4}
-              />
+              <meshStandardMaterial color="#e6c45e" emissive="#f4953f" emissiveIntensity={1.4} />
             </mesh>
           );
         })}
@@ -824,16 +726,6 @@ export default function World({
 }: Props) {
   const [zoomPercent, setZoomPercent] = useState(DEFAULT_ZOOM_PERCENT);
   const people = run?.people ?? environment.population;
-  const context = useMemo(
-    () =>
-      environment.visualContext ??
-      resolveVisualContext(
-        environment.description,
-        environment.layout?.venueKind,
-      ),
-    [environment],
-  );
-  const palette = useMemo(() => scenePalette(context), [context]);
   const isMars = environment.demo?.kind === "mars";
   const daylight = daylightBackgroundForProgress(
     run ? run.time / Math.max(1, run.duration) : 0.2,
@@ -914,11 +806,7 @@ export default function World({
           aria-label="Interactive 3D environment"
           onPointerMissed={() => onSelect("")}
         >
-          <ambientLight
-            intensity={
-              isMars ? 0.65 : context.setting === "interior" ? 1.7 : 1.2
-            }
-          />
+          <ambientLight intensity={isMars ? 0.65 : 1.5} />
           <directionalLight
             position={[15, 30, 10]}
             intensity={isMars ? 1.25 : 2.5}
@@ -949,12 +837,7 @@ export default function World({
           <Box
             position={[scene.center[0], -0.65, scene.center[1]]}
             scale={[scene.width, 1.1, scene.depth]}
-            color={isMars ? "#5d3e36" : palette.ground}
-          />
-          <SettingBackdrop
-            scene={scene}
-            context={context}
-            seed={environment.seed}
+            color={isMars ? "#5d3e36" : "#c5d2b9"}
           />
           {isMars && (
             <MarsScenery
@@ -983,13 +866,11 @@ export default function World({
                   from={[path[i].x, path[i].z]}
                   to={[point.x, point.z]}
                   weight={connection.weight}
-                  color={palette.paving}
                   mars={isMars}
                 />
               ));
           })}
           <Road
-            color={palette.paving}
             from={[environment.exit.x, environment.exit.z]}
             to={[
               scene.nearestExitPlace.entry.x,
@@ -1001,7 +882,6 @@ export default function World({
             <group key={place.id}>
               <Building
                 place={place}
-                context={context}
                 appearance={
                   environment.presentation?.[place.id] ?? {
                     color: "#95a591",
@@ -1027,16 +907,14 @@ export default function World({
                 z={scene.maxZ - 2}
               />,
             ])}
-          {isMars &&
-            environment.demo?.safePlaceId &&
-            (() => {
-              const bunker = environment.places.find(
-                (place) => place.id === environment.demo?.safePlaceId,
-              );
-              return bunker ? (
-                <SafehouseSignal x={bunker.position.x} z={bunker.position.z} />
-              ) : null;
-            })()}
+          {isMars && environment.demo?.safePlaceId && (() => {
+            const bunker = environment.places.find(
+              (place) => place.id === environment.demo?.safePlaceId,
+            );
+            return bunker ? (
+              <SafehouseSignal x={bunker.position.x} z={bunker.position.z} />
+            ) : null;
+          })()}
           {people
             .filter((p) => p.presence === "inside")
             .map((p, i) => {

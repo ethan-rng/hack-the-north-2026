@@ -4,7 +4,7 @@ import { Box3, Euler, Matrix4, Vector3 } from "three";
 
 export type Vec3 = [number, number, number];
 
-export type Primitive = (
+export type Primitive =
   | {
       kind: "box";
       position: Vec3;
@@ -53,8 +53,7 @@ export type Primitive = (
       segments?: number;
       color?: string;
       rotation?: Vec3;
-    }
-) & { material?: "masonry" | "glass" | "metal" | "wood" | "roof" };
+    };
 
 export type BuildingCategory =
   | "residential"
@@ -159,23 +158,6 @@ export const To = (
   rotation,
 });
 
-function Surface({
-  color,
-  material,
-}: {
-  color: string;
-  material?: Primitive["material"];
-}) {
-  const glass = material === "glass";
-  return (
-    <meshStandardMaterial
-      color={color}
-      roughness={glass ? 0.16 : material === "metal" ? 0.35 : 0.86}
-      metalness={material === "metal" ? 0.65 : glass ? 0.18 : 0}
-    />
-  );
-}
-
 export function BuildingModel({
   primitives,
   fallbackColor,
@@ -197,7 +179,7 @@ export function BuildingModel({
               rotation={p.rotation}
             >
               <boxGeometry args={p.scale} />
-              <Surface color={color} material={p.material} />
+              <meshStandardMaterial color={color} roughness={0.85} />
             </mesh>
           );
         if (p.kind === "cyl")
@@ -212,7 +194,7 @@ export function BuildingModel({
               <cylinderGeometry
                 args={[p.radiusTop, p.radiusBottom, p.height, p.segments ?? 16]}
               />
-              <Surface color={color} material={p.material} />
+              <meshStandardMaterial color={color} roughness={0.8} />
             </mesh>
           );
         if (p.kind === "cone")
@@ -225,14 +207,14 @@ export function BuildingModel({
               rotation={p.rotation}
             >
               <coneGeometry args={[p.radius, p.height, p.segments ?? 12]} />
-              <Surface color={color} material={p.material} />
+              <meshStandardMaterial color={color} roughness={0.8} />
             </mesh>
           );
         if (p.kind === "sphere")
           return (
             <mesh key={i} castShadow receiveShadow position={p.position}>
               <sphereGeometry args={[p.radius, 20, 16]} />
-              <Surface color={color} material={p.material} />
+              <meshStandardMaterial color={color} roughness={0.7} />
             </mesh>
           );
         if (p.kind === "octa")
@@ -245,7 +227,7 @@ export function BuildingModel({
               rotation={p.rotation}
             >
               <icosahedronGeometry args={[p.radius, p.detail ?? 0]} />
-              <Surface color={color} material={p.material} />
+              <meshStandardMaterial color={color} roughness={0.75} />
             </mesh>
           );
         return (
@@ -257,7 +239,7 @@ export function BuildingModel({
             rotation={p.rotation}
           >
             <torusGeometry args={[p.radius, p.tube, 10, p.segments ?? 20]} />
-            <Surface color={color} material={p.material} />
+            <meshStandardMaterial color={color} roughness={0.7} />
           </mesh>
         );
       })}
