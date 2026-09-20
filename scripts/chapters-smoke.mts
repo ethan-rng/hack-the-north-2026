@@ -139,6 +139,17 @@ try {
   await expect(
     page.getByRole("button", { name: "Play recording", exact: true }),
   ).toBeVisible();
+  const sceneBox = await page.locator(".world-pane").boundingBox();
+  const panelBox = await page.locator(".event-composer").boundingBox();
+  assert.ok(
+    sceneBox && panelBox && sceneBox.y + sceneBox.height <= panelBox.y + 1,
+    "Scene and controls must occupy separate panes",
+  );
+  await expect(page.locator(".event-suggestions")).toHaveCount(0);
+  await expect(page.locator(".timeline-chapter-track")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Checkpoint / })).toHaveCount(
+    2,
+  );
   const metricsBox = await page.locator(".world-metrics").boundingBox();
   const composerBox = await page.locator(".event-composer").boundingBox();
   assert.ok(

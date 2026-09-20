@@ -1512,26 +1512,41 @@ label {
   color: #8c977b;
   white-space: nowrap;
 }
-.timeline-chapter-track {
+.timeline-scrubber {
+  position: relative;
+  padding-top: 20px;
+}
+.timeline-markers {
+  position: absolute;
+  inset: 0 7px auto;
+  height: 20px;
+}
+.timeline-markers button {
+  position: absolute;
+  top: 0;
+  width: 20px;
+  height: 22px;
+  transform: translateX(-50%);
   display: flex;
-  gap: 3px;
-  margin: 3px 7px 8px;
+  justify-content: center;
+  color: #8a9c7a;
+  padding-top: 1px;
 }
-.timeline-chapter-track button {
-  flex-basis: 0;
-  min-width: 0;
-  height: 23px;
-  text-align: left;
-  border-left: 2px solid #8a9c7a;
-  border-radius: 3px;
-  background: #e8eddf;
-  color: #526747;
-  font-size: 9px;
-  padding-left: 5px;
+.timeline-markers button::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 1px;
+  height: 8px;
+  background: currentColor;
 }
-.timeline-chapter-track button[aria-current="step"] {
-  background: #cad9bb;
-  border-left-color: #496140;
+.timeline-markers button[aria-current="step"],
+.timeline-markers button:hover:not(:disabled) {
+  color: #395b3d;
+}
+.timeline-markers button[aria-current="step"] svg {
+  fill: #cad9bb;
 }
 .timeline-chapter-heading {
   display: flex;
@@ -1645,10 +1660,10 @@ label {
   z-index: 35;
 }
 .world-metrics {
-  bottom: calc(var(--composer-height, 228px) + 75px);
+  bottom: 48px;
 }
 .map-help {
-  bottom: calc(var(--composer-height, 228px) + 53px);
+  bottom: 26px;
 }
 @media (max-width: 1180px) {
   .timeline-status {
@@ -1667,5 +1682,36 @@ label {
   }
   .processing-overlay {
     top: 45%;
+  }
+}
+
+/* The canvas and controls occupy disjoint panes, including when status rows grow. */
+@media (min-width: 851px) {
+  .workspace .world-pane:not(.summary-world) {
+    bottom: var(--composer-height, 260px);
+    overflow: hidden;
+  }
+  .workspace .event-composer {
+    left: 220px;
+    right: 330px;
+    bottom: 0;
+    border-radius: 0;
+    border-width: 1px 0 0;
+    background: #fffdf8;
+    box-shadow: none;
+    padding: 14px 20px;
+    max-height: 45dvh;
+    overflow-y: auto;
+  }
+}
+@media (min-width: 1600px) {
+  .workspace .event-composer {
+    right: 360px;
+  }
+}
+@media (min-width: 851px) and (max-width: 1180px) {
+  .workspace .event-composer {
+    left: 175px;
+    right: 300px;
   }
 }

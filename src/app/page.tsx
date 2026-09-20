@@ -689,7 +689,7 @@ function EventCard({ event }: { event: Event }) {
     </details>
   );
 }
-// Keep the scene metrics above the composer as chapter/status rows change its height.
+// Reserve a separate scene viewport above the controls as chapter/status rows change height.
 function observeComposer(node: HTMLFormElement | null) {
   if (!node) return;
   const root = node.closest("main");
@@ -1411,27 +1411,6 @@ export default function Page() {
                     )}
                     <span>Process event</span>
                   </button>
-                </div>
-                <div className="event-suggestions">
-                  <span>TRY</span>
-                  {[
-                    env!.places.find((p) => p.capabilities.includes("purchase"))
-                      ? `Announce 20% off at ${env!.places.find((p) => p.capabilities.includes("purchase"))!.name} for five minutes`
-                      : "Announce a gathering at the central plaza",
-                    "A dinosaur enters the central plaza",
-                  ].map((s) => (
-                    <button
-                      type="button"
-                      key={s}
-                      onClick={() => {
-                        setText(s);
-                        input.current?.focus();
-                      }}
-                    >
-                      {s}
-                      <ArrowUpRight size={12} />
-                    </button>
-                  ))}
                 </div>
               </form>
             </>

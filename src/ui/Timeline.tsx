@@ -1,5 +1,5 @@
 "use client";
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Flag, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { usePlayback } from "./usePlayback";
 import type { Segment } from "@/core/types";
 const stamp = (seconds: number) =>
@@ -69,34 +69,36 @@ export default function Timeline({
               : "Paused"}
         </span>
       </div>
-      {readyChapters.length > 0 && (
-        <div className="timeline-chapter-track" aria-label="Event checkpoints">
+      <div className="timeline-scrubber">
+        <div className="timeline-markers" aria-label="Event checkpoints">
           {readyChapters.map((s) => (
             <button
               type="button"
               key={s.id}
-              style={{ flexGrow: Math.max(1, s.endTime - s.startTime) }}
+              style={{
+                left: `${(100 * (s.startTime - p.start)) / Math.max(0.1, p.end - p.start)}%`,
+              }}
               aria-label={`Checkpoint ${chapters.indexOf(s) + 1}: ${s.originalText}, ${stamp(s.startTime)}`}
               aria-current={currentSegment?.id === s.id ? "step" : undefined}
               title={`${stamp(s.startTime)} · ${s.originalText}`}
               disabled={!!p.processing || !p.loadedSegmentIds.includes(s.id)}
               onClick={() => p.seek(s.startTime)}
             >
-              <span>{chapters.indexOf(s) + 1}</span>
+              <Flag size={12} aria-hidden="true" />
             </button>
           ))}
         </div>
-      )}
-      <input
-        type="range"
-        aria-label="Simulation timeline"
-        min={p.start}
-        max={Math.max(p.start + 0.1, p.end)}
-        step="0.1"
-        value={p.cursor}
-        disabled={!p.hasFrames || !!p.processing || p.loading}
-        onChange={(e) => p.seek(Number(e.target.value))}
-      />
+        <input
+          type="range"
+          aria-label="Simulation timeline"
+          min={p.start}
+          max={Math.max(p.start + 0.1, p.end)}
+          step="0.1"
+          value={p.cursor}
+          disabled={!p.hasFrames || !!p.processing || p.loading}
+          onChange={(e) => p.seek(Number(e.target.value))}
+        />
+      </div>
       <div className="timeline-chapter-heading">
         <b>Chapters</b>
         <span>Each event starts a new chapter</span>
