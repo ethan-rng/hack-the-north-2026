@@ -1,6 +1,6 @@
-# Crowd Control Product Requirements Document
+# Commotion Product Requirements Document
 
-Working title: Crowd Control  
+Working title: Commotion
 Delivery: Hack the North MVP, ready before hacking ends  
 Team: Julian, product manager and frontend developer; two engineers focused on backend and simulation  
 Audience: The three builders and their coding agents
@@ -31,7 +31,7 @@ Baseten must perform meaningful runtime work, including event interpretation. It
 
 ## 2 Problem and product value
 
-Changes to promotions, service capacity, closures, and information can redirect people, create queues, consume stock, and affect neighboring businesses. Crowd Control makes those interactions visible and inspectable in an environment the user describes.
+Changes to promotions, service capacity, closures, and information can redirect people, create queues, consume stock, and affect neighboring businesses. Commotion makes those interactions visible and inspectable in an environment the user describes.
 
 Research grounds available facts about the environment. Simulated populations, missing operational parameters, and generated behavior remain assumptions unless separately supported. The MVP explores possible outcomes under those assumptions. It does not claim to forecast real sales, passenger behavior, or evacuation safety accurately.
 

@@ -1,6 +1,6 @@
 # Jev team API
 
-The Cloudflare Worker exposes `typesafe/jev` for Crowd Control's individual decisions. It sends native Jev `state` and typed `questions` through the Workers AI binding, using the authenticated `crowd-control` AI Gateway. The simulation backend owns action eligibility, state, and execution.
+The Cloudflare Worker exposes `typesafe/jev` for Commotion's individual decisions. It sends native Jev `state` and typed `questions` through the Workers AI binding, using the authenticated `crowd-control` AI Gateway. The simulation backend owns action eligibility, state, and execution.
 
 ## Deployment status
 

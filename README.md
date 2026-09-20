@@ -1,8 +1,8 @@
-# Crowd Control
+# Commotion
 
 **[Open the deployed app](https://crowd-control-julian.juelzlax.workers.dev)**
 
-Describe a place, generate a researched low-poly world, and introduce events to explore how its people react. The implementation follows the [Crowd-Control PRD](docs/Crowd-Control-PRD.md).
+Describe a place, generate a researched low-poly world, and introduce events to explore how its people react. The implementation follows the [Commotion PRD](docs/Crowd-Control-PRD.md).
 
 ## Stack
 
