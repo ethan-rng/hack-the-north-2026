@@ -107,18 +107,18 @@ export const generatedSchema = z.object({
       }),
     )
     .min(6)
-    .max(24),
+    .max(30),
   connections: z
     .array(
       z.object({
-        fromPlace: z.number().int().min(1).max(24),
-        toPlace: z.number().int().min(1).max(24),
+        fromPlace: z.number().int().min(1).max(30),
+        toPlace: z.number().int().min(1).max(30),
         weight: z.number().int().min(1).max(3),
       }),
     )
     .min(5)
-    .max(60),
-  populationSize: z.number().int().min(20).max(160).optional(),
+    .max(80),
+  populationSize: z.number().int().min(30).max(250).optional(),
 });
 export type Generated = z.infer<typeof generatedSchema>;
 export const eventSchema = z.object({
@@ -549,8 +549,8 @@ export function compileEnvironment(
   const hasFood = env.products.some((p) => p.category === "food");
   const goalRng = random(seed ^ 0x6a09e667);
   const desiredPopulation = Math.min(
-    160,
-    Math.max(20, data.populationSize ?? 40),
+    250,
+    Math.max(30, data.populationSize ?? 150),
   );
   const roster = Array.from({ length: desiredPopulation }, (_, i) => {
     const base = names[i % names.length];
@@ -743,5 +743,6 @@ export function fallbackConfiguration(description: string): Generated {
       { fromPlace: 6, toPlace: 1, weight: 3 },
       { fromPlace: 2, toPlace: 5, weight: 2 },
     ],
+    populationSize: 40,
   };
 }
