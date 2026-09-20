@@ -1,7 +1,12 @@
+import {
+  visualContextSchema,
+  resolveVisualContext,
+  facadeColor,
+} from "./visualContext";
 import { z } from "zod";
 import { spatialLayout, supportedEvidence } from "./spatial";
 import { contextualPopulation } from "./population";
-import { pickStyleId, styleFor, styleIds } from "./styleCatalog";
+import { pickStyleId, styleIds } from "./styleCatalog";
 
 const evidenceSchema = z.object({
   sourceIds: z.array(z.string().max(30)).min(1).max(5),
@@ -19,6 +24,7 @@ import {
 } from "./types";
 
 export const generatedSchema = z.object({
+  visualContext: visualContextSchema.optional(),
   venueKind: z
     .enum(["airport", "mall", "neighborhood", "park", "small_venue", "generic"])
     .optional(),
@@ -352,6 +358,11 @@ export function compileEnvironment(
     graphLayout(data.places.length, indexedConnections, seed),
   );
   const layout = spatial.places;
+  const visualContext = resolveVisualContext(
+    description,
+    spatial.info.venueKind,
+    data.visualContext,
+  );
   const provenance: Provenance[] = [
     {
       targetPath: "description",
@@ -380,6 +391,7 @@ export function compileEnvironment(
     assumptions: [
       ...data.assumptions,
       ...spatial.info.notes,
+      "Architecture, materials and background scenery are illustrative interpretations of the setting, not measured replicas.",
       "Population cohorts and arrival schedules are synthetic; budgets, prices, stock, capacity, service times and preferences are assumed. Groups share purposes but make individual decisions.",
       "Free non-retail services use independent timed slots. No synchronized rides, screening or boarding rules.",
       "Results illustrate this scenario; they do not forecast real sales or evacuation safety.",
@@ -390,6 +402,7 @@ export function compileEnvironment(
     services: [],
     exit: spatial.exit,
     layout: spatial.info,
+    visualContext,
     population: [],
     presentation: {},
   };
@@ -433,22 +446,24 @@ export function compileEnvironment(
       geographic,
       ...(Object.keys(details).length ? { details } : {}),
     });
-    let chosenStyle: string | undefined = undefined;
-    const supplied = input.styleId ? styleFor(input.styleId) : undefined;
-    if (supplied && supplied.assets.includes(input.asset)) {
-      chosenStyle = supplied.id;
-    } else {
-      chosenStyle = pickStyleId(
-        input.asset,
-        seed,
-        index,
-        input.name,
-        usedStyles,
-      );
-    }
+    const chosenStyle = pickStyleId(
+      input.asset,
+      seed,
+      index,
+      input.name,
+      usedStyles,
+      {
+        typeLabel: input.typeLabel,
+        description: input.description,
+        tags: input.tags,
+        setting: visualContext.setting,
+        architecture: visualContext.architecture,
+        preferred: input.styleId,
+      },
+    );
     if (chosenStyle) usedStyles.add(chosenStyle);
     env.presentation[id] = {
-      color: colors[index % colors.length],
+      color: facadeColor(visualContext, index),
       asset: input.asset,
       ...(chosenStyle ? { styleId: chosenStyle } : {}),
       ...(input.styleBrief ? { styleBrief: input.styleBrief.trim() } : {}),

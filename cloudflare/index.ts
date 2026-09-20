@@ -1,3 +1,8 @@
+import {
+  buildingDesignContext,
+  scenePalette,
+  resolveVisualContext,
+} from "../src/core/visualContext";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 import {
@@ -118,19 +123,45 @@ export class SimulationSession extends DurableObject<Bindings> {
     const scope = targets.slice(0, limit);
     // Content-address each brief so identical descriptions across places (or
     // sessions inside this DO) don't pay the LLM cost twice.
-    const hashes = await Promise.all(
-      scope.map((t) => this.hashBrief(t.brief)),
+    const contexts = scope.map((target) =>
+      buildingDesignContext(environment, target.placeId),
     );
-    const palette = Object.values(environment.presentation)
-      .map((p) => p?.color)
-      .filter((c): c is string => typeof c === "string")
-      .slice(0, 6);
+    const colors = scenePalette(
+      environment.visualContext ??
+        resolveVisualContext(
+          environment.description,
+          environment.layout?.venueKind,
+        ),
+    );
+    const palette = [
+      colors.wall,
+      colors.roof,
+      colors.trim,
+      colors.glass,
+      colors.paving,
+    ];
+    const hashes = await Promise.all(
+      scope.map((target, index) =>
+        this.hashBrief(
+          JSON.stringify({
+            brief: target.brief,
+            context: contexts[index],
+            palette,
+          }),
+        ),
+      ),
+    );
     const results = await Promise.all(
       scope.map(async ({ brief }, index) => {
         const hash = hashes[index];
         const cached = this.readBuildingCache(hash);
         if (cached) return cached;
-        const generated = await generateBuilding(this.env, brief, palette);
+        const generated = await generateBuilding(
+          this.env,
+          brief,
+          palette,
+          contexts[index],
+        );
         if (!generated) return undefined;
         this.writeBuildingCache(hash, generated.primitives);
         return generated.primitives as unknown[];

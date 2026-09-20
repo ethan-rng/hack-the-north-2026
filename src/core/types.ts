@@ -1,3 +1,4 @@
+import type { VisualContext } from "./visualContext";
 export type Point = { x: number; z: number };
 export type VenueKind =
   "airport" | "mall" | "neighborhood" | "park" | "small_venue" | "generic";
@@ -119,6 +120,7 @@ export interface Environment {
   services: Service[];
   exit: Point;
   layout?: LayoutInfo;
+  visualContext?: VisualContext;
   population: Person[];
   presentation: Record<
     string,

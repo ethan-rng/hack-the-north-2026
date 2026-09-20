@@ -217,20 +217,16 @@ describe("venue-aware generation", () => {
     });
   });
 
-  it("assigns a varied compatible styleId to every place, even without LLM input", () => {
+  it("uses semantic building fallbacks rather than forcing unrelated styles", () => {
     const env = compile(configuration("mall"));
-    const styles = env.places.map((p) => env.presentation[p.id].styleId);
-    expect(styles.every((s) => typeof s === "string" && s.length > 0)).toBe(
-      true,
+    const byName = (name: string) =>
+      env.presentation[env.places.find((p) => p.name === name)!.id];
+    expect(byName("Market stall").styleId).toBe("market-stall");
+    expect(byName("Rest garden").styleId).toMatch(
+      /gazebo|park-pavilion|bandstand/,
     );
-    // Diversity: fewer than half the places may share the same style.
-    const counts = new Map<string, number>();
-    for (const s of styles as string[])
-      counts.set(s, (counts.get(s) ?? 0) + 1);
-    const maxRepeats = Math.max(...counts.values());
-    expect(maxRepeats).toBeLessThanOrEqual(
-      Math.max(1, Math.floor(env.places.length / 2)),
-    );
+    // An unknown attraction can use its generic asset rather than an unrelated landmark.
+    expect(byName("Visitor service").asset).toBe("attraction");
   });
 
   it("propagates styleBrief onto presentation for dynamic building generation", () => {

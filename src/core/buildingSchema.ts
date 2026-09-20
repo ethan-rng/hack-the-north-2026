@@ -8,9 +8,20 @@ const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 const bounded = (min: number, max: number) => z.number().min(min).max(max);
 const vec3 = z.tuple([bounded(-14, 14), bounded(-1, 14), bounded(-14, 14)]);
-const rotation = z.tuple([bounded(-6.3, 6.3), bounded(-6.3, 6.3), bounded(-6.3, 6.3)]);
+const rotation = z.tuple([
+  bounded(-6.3, 6.3),
+  bounded(-6.3, 6.3),
+  bounded(-6.3, 6.3),
+]);
+const material = z
+  .enum(["masonry", "glass", "metal", "wood", "roof"])
+  .optional();
 const color = z.string().regex(HEX_COLOR).optional();
-const scale = z.tuple([bounded(0.05, 20), bounded(0.05, 20), bounded(0.05, 20)]);
+const scale = z.tuple([
+  bounded(0.05, 20),
+  bounded(0.05, 20),
+  bounded(0.05, 20),
+]);
 const radius = bounded(0.05, 12);
 const height = bounded(0.1, 14);
 const segments = z.number().int().min(3).max(64).optional();
@@ -22,6 +33,7 @@ export const primitiveSchema = z.discriminatedUnion("kind", [
     position: vec3,
     scale,
     color,
+    material,
     rotation: rotation.optional(),
   }),
   z.object({
@@ -32,6 +44,7 @@ export const primitiveSchema = z.discriminatedUnion("kind", [
     height,
     segments,
     color,
+    material,
     rotation: rotation.optional(),
   }),
   z.object({
@@ -41,6 +54,7 @@ export const primitiveSchema = z.discriminatedUnion("kind", [
     height,
     segments,
     color,
+    material,
     rotation: rotation.optional(),
   }),
   z.object({
@@ -48,6 +62,7 @@ export const primitiveSchema = z.discriminatedUnion("kind", [
     position: vec3,
     radius,
     color,
+    material,
   }),
   z.object({
     kind: z.literal("octa"),
@@ -55,6 +70,7 @@ export const primitiveSchema = z.discriminatedUnion("kind", [
     radius,
     detail: z.number().int().min(0).max(2).optional(),
     color,
+    material,
     rotation: rotation.optional(),
   }),
   z.object({
@@ -64,6 +80,7 @@ export const primitiveSchema = z.discriminatedUnion("kind", [
     tube,
     segments,
     color,
+    material,
     rotation: rotation.optional(),
   }),
 ]);

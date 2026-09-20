@@ -21,6 +21,13 @@ import {
   type Primitive,
 } from "@/ui/buildings/primitives";
 import { stylesById } from "@/ui/buildings/styles";
+import SettingBackdrop from "@/ui/SettingBackdrop";
+import {
+  resolveVisualContext,
+  scenePalette,
+  type VisualContext,
+} from "@/core/visualContext";
+import { contextualPrimitives } from "@/ui/buildings/contextual";
 import { daylightBackgroundForProgress } from "@/ui/daylight";
 
 export type HeatMode = "off" | "traffic" | "occupancy" | "revenue" | "wait";
@@ -149,10 +156,12 @@ function Road({
   from,
   to,
   weight = 1,
+  color,
 }: {
   from: [number, number];
   to: [number, number];
   weight?: number;
+  color?: string;
 }) {
   const dx = to[0] - from[0];
   const dz = to[1] - from[1];
@@ -165,19 +174,21 @@ function Road({
       <Box
         position={[0, 0, 0]}
         scale={[length, 0.1, 1.25 - weight * 0.08]}
-        color={weight === 3 ? "#e8dec9" : "#f7eedc"}
+        color={color ?? (weight === 3 ? "#e8dec9" : "#f7eedc")}
       />
     </group>
   );
 }
 function Building({
   place,
+  context,
   appearance,
   selected,
   closed,
   onSelect,
 }: {
   place: Place;
+  context: VisualContext;
   appearance: {
     color: string;
     asset: string;
@@ -200,12 +211,33 @@ function Building({
       Array.isArray(appearance.customPrimitives) &&
       appearance.customPrimitives.length
     )
-      return appearance.customPrimitives as Primitive[];
-    return style?.build({
+      return contextualPrimitives(
+        appearance.customPrimitives as Primitive[],
+        context,
+        appearance.color,
+        appearance.styleId,
+        true,
+      );
+    const base = style?.build({
       color: closed ? "#a9aaa3" : appearance.color,
       closed,
     });
-  }, [appearance.customPrimitives, style, closed, appearance.color]);
+    return base
+      ? contextualPrimitives(
+          base,
+          context,
+          closed ? "#a9aaa3" : appearance.color,
+          appearance.styleId,
+        )
+      : undefined;
+  }, [
+    appearance.customPrimitives,
+    appearance.styleId,
+    style,
+    closed,
+    appearance.color,
+    context,
+  ]);
   const bounds = useMemo(
     () =>
       primitives
@@ -227,7 +259,7 @@ function Building({
       <Box
         position={[0, 0.12, 0]}
         scale={[width, 0.24, depth]}
-        color={selected ? "#203e48" : "#d7dac9"}
+        color={selected ? "#203e48" : scenePalette(context).paving}
       />
       <group scale={[width / bounds.width, 1, depth / bounds.depth]}>
         <group position={[-bounds.x, 0, -bounds.z]}>
@@ -445,16 +477,16 @@ function Walker({
     person.currentAction?.type === "socialize"
       ? { Icon: MessageCircle, label: "Chatting with peers", tone: "social" }
       : person.mood === "frightened" || person.stress >= 0.75
-      ? { Icon: TriangleAlert, label: "Afraid", tone: "danger" }
-      : person.hunger >= 0.55
-        ? { Icon: Utensils, label: "Hungry", tone: "need" }
-        : person.fatigue >= 0.75
-          ? { Icon: BatteryLow, label: "Exhausted", tone: "warn" }
-          : person.mood === "frustrated"
-            ? { Icon: Frown, label: "Frustrated", tone: "warn" }
-            : person.mood === "pleased" || person.mood === "happy"
-              ? { Icon: Smile, label: "Happy", tone: "positive" }
-              : null;
+        ? { Icon: TriangleAlert, label: "Afraid", tone: "danger" }
+        : person.hunger >= 0.55
+          ? { Icon: Utensils, label: "Hungry", tone: "need" }
+          : person.fatigue >= 0.75
+            ? { Icon: BatteryLow, label: "Exhausted", tone: "warn" }
+            : person.mood === "frustrated"
+              ? { Icon: Frown, label: "Frustrated", tone: "warn" }
+              : person.mood === "pleased" || person.mood === "happy"
+                ? { Icon: Smile, label: "Happy", tone: "positive" }
+                : null;
   const StateIcon = state?.Icon;
   return (
     <group
@@ -577,6 +609,16 @@ export default function World({
 }: Props) {
   const [zoomPercent, setZoomPercent] = useState(DEFAULT_ZOOM_PERCENT);
   const people = run?.people ?? environment.population;
+  const context = useMemo(
+    () =>
+      environment.visualContext ??
+      resolveVisualContext(
+        environment.description,
+        environment.layout?.venueKind,
+      ),
+    [environment],
+  );
+  const palette = useMemo(() => scenePalette(context), [context]);
   const daylight = daylightBackgroundForProgress(
     run ? run.time / Math.max(1, run.duration) : 0.2,
   );
@@ -654,10 +696,12 @@ export default function World({
           aria-label="Interactive 3D environment"
           onPointerMissed={() => onSelect("")}
         >
-          <ambientLight intensity={1.5} />
+          <ambientLight
+            intensity={context.setting === "interior" ? 1.7 : 1.2}
+          />
           <directionalLight
             position={[15, 30, 10]}
-            intensity={2.5}
+            intensity={context.setting === "interior" ? 1.2 : 2.2}
             castShadow
             shadow-mapSize={[1024, 1024]}
             shadow-camera-left={-38}
@@ -685,7 +729,12 @@ export default function World({
           <Box
             position={[scene.center[0], -0.65, scene.center[1]]}
             scale={[scene.width, 1.1, scene.depth]}
-            color="#c5d2b9"
+            color={palette.ground}
+          />
+          <SettingBackdrop
+            scene={scene}
+            context={context}
+            seed={environment.seed}
           />
           {run && heatMode !== "off" && (
             <HeatLayer environment={environment} run={run} mode={heatMode} />
@@ -707,10 +756,12 @@ export default function World({
                   from={[path[i].x, path[i].z]}
                   to={[point.x, point.z]}
                   weight={connection.weight}
+                  color={palette.paving}
                 />
               ));
           })}
           <Road
+            color={palette.paving}
             from={[environment.exit.x, environment.exit.z]}
             to={[
               scene.nearestExitPlace.entry.x,
@@ -721,6 +772,7 @@ export default function World({
             <group key={place.id}>
               <Building
                 place={place}
+                context={context}
                 appearance={
                   environment.presentation?.[place.id] ?? {
                     color: "#95a591",
@@ -733,18 +785,6 @@ export default function World({
               />
             </group>
           ))}
-          {[0.12, 0.32, 0.52, 0.72, 0.9].flatMap((ratio) => [
-            <Tree
-              key={`north-${ratio}`}
-              x={scene.minX + scene.width * ratio}
-              z={scene.minZ + 2}
-            />,
-            <Tree
-              key={`south-${ratio}`}
-              x={scene.minX + scene.width * ratio}
-              z={scene.maxZ - 2}
-            />,
-          ])}
           {people
             .filter((p) => p.presence === "inside")
             .map((p, i) => {
