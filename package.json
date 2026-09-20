@@ -5,17 +5,22 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "worker:dev": "wrangler dev --config worker/wrangler.toml",
-    "worker:deploy": "wrangler deploy --config worker/wrangler.toml",
-    "worker:tail": "wrangler tail --config worker/wrangler.toml",
-    "worker:login": "wrangler login"
+    "start": "wrangler dev",
+    "worker:dev": "wrangler dev",
+    "worker:deploy": "npm run deploy",
+    "worker:tail": "wrangler tail",
+    "worker:login": "wrangler login",
+    "preview": "wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json",
+    "test": "vitest run tests",
+    "cf:types": "wrangler types",
+    "test:e2e": "node scripts/live-smoke.mjs && node scripts/airport-smoke.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
-    "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.47.0",
@@ -30,14 +35,17 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260919.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.186.0",
+    "prettier": "^3.9.8",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5",
+    "vitest": "^4.1.11",
     "wrangler": "^4.135.0"
   }
 }

@@ -25,6 +25,7 @@ export function ReplayControls({ totalTicks, onTickChange }: Props) {
     const step = (t: number) => {
       if (!lastTime.current) lastTime.current = t;
       const dt = t - lastTime.current;
+      // 1x = one tick per 400ms real time.
       const perTickMs = 400 / speed;
       if (dt >= perTickMs) {
         lastTime.current = t;
@@ -48,35 +49,23 @@ export function ReplayControls({ totalTicks, onTickChange }: Props) {
   }, [playing, speed, totalTicks]);
 
   return (
-    <div className="card flex flex-wrap items-center gap-3 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-zinc-200 bg-white px-3 py-2">
       <button
         onClick={() => setPlaying((p) => !p)}
-        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-3.5 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
+        className="rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white hover:bg-zinc-700"
       >
-        {playing ? (
-          <>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect x="1" y="1" width="3" height="8" rx="0.5" /><rect x="6" y="1" width="3" height="8" rx="0.5" /></svg>
-            Pause
-          </>
-        ) : (
-          <>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M2 1l7 4-7 4z" /></svg>
-            Play
-          </>
-        )}
+        {playing ? "Pause" : "Play"}
       </button>
-      <div className="flex overflow-hidden rounded-full border border-[var(--color-app-border-strong)]">
+      <div className="flex gap-1">
         {([1, 4, 16] as const).map((s) => (
           <button
             key={s}
             onClick={() => setSpeed(s)}
-            className={`px-2.5 py-1 text-xs font-medium tabular-nums transition-colors ${
-              speed === s
-                ? "bg-[var(--color-accent)] text-white"
-                : "bg-transparent text-[var(--color-ink-muted)] hover:bg-[var(--color-app-bg)]"
+            className={`rounded px-2 py-1 text-xs font-medium ${
+              speed === s ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
             }`}
           >
-            {s}×
+            {s}x
           </button>
         ))}
       </div>
@@ -89,9 +78,9 @@ export function ReplayControls({ totalTicks, onTickChange }: Props) {
           setPlaying(false);
           setTick(Number(e.target.value));
         }}
-        className="flex-1 min-w-[240px] accent-[var(--color-accent)]"
+        className="flex-1 min-w-[240px]"
       />
-      <div className="w-28 text-right text-xs text-[var(--color-ink-subtle)] tabular-nums">
+      <div className="w-24 text-right text-xs text-zinc-600 tabular-nums">
         tick {tick} / {totalTicks - 1}
       </div>
     </div>
