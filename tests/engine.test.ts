@@ -499,6 +499,14 @@ describe("perception, inference and baseline boundaries", () => {
       shortestPlacePath(env, env.places[0].id, env.places[11].id).at(-1),
     ).toBe(env.places[11].id);
   });
+  it("assigns each person two to five seeded tasks", () => {
+    const { env } = fixture();
+    const taskCounts = env.population.map(
+      (person) => person.goals.filter((goal) => goal.kind !== "exit").length,
+    );
+    expect(taskCounts.every((count) => count >= 2 && count <= 5)).toBe(true);
+    expect(new Set(taskCounts).size).toBeGreaterThan(1);
+  });
   it("rejects unknown references and retains unsupported event history", () => {
     const { env, run } = fixture();
     const event = addEvent(env, run, [effect("discount", "invented-id", 100)]);

@@ -459,54 +459,65 @@ export function compileEnvironment(
   const gates = env.places.filter((p) =>
     /\bgate\b/i.test([p.name, p.typeLabel, ...p.tags].join(" ")),
   );
+  const hasFood = env.products.some((p) => p.category === "food");
+  const goalRng = random(seed ^ 0x6a09e667);
   env.population = names.map((name, i) => {
-    const target = env.places[i % env.places.length];
-    let goals: Goal[] = [
-      {
-        id: `g-${i}-visit`,
-        kind: "visit",
-        targetId: target.id,
-        description: `Visit ${target.name}`,
-        priority: 0.7,
-        status: "pending",
+    const taskCount = 2 + Math.floor(goalRng() * 4);
+    const candidates: Goal[] = Array.from(
+      { length: Math.min(3, env.places.length) },
+      (_, offset): Goal => {
+        const target = env.places[(i + offset) % env.places.length];
+        return {
+          id: `g-${i}-visit-${offset + 1}`,
+          kind: "visit",
+          targetId: target.id,
+          description: `Visit ${target.name}`,
+          priority: 0.7,
+          status: "pending",
+        };
       },
-    ];
-    if (i % 4 === 0 && retail.length) {
+    );
+    if (retail.length) {
       const shop = retail[i % retail.length];
-      goals = [
-        {
-          id: `g-${i}-buy`,
-          kind: "buy",
-          targetId: shop.id,
-          description: `Buy one item at ${shop.name}`,
-          priority: 0.9,
-          status: "pending",
-        },
-      ];
+      candidates.push({
+        id: `g-${i}-buy`,
+        kind: "buy",
+        targetId: shop.id,
+        description: `Buy one item at ${shop.name}`,
+        priority: 0.9,
+        status: "pending",
+      });
     }
-    if (i % 4 === 1) {
+    if (timed.length) {
       const service = timed[i % timed.length];
-      goals = [
-        {
-          id: `g-${i}-service`,
-          kind: "receive_service",
-          targetId: service.id,
-          description: `Receive service at ${service.name}`,
-          priority: 0.95,
-          status: "pending",
-        },
-      ];
+      candidates.push({
+        id: `g-${i}-service`,
+        kind: "receive_service",
+        targetId: service.id,
+        description: `Receive service at ${service.name}`,
+        priority: 0.95,
+        status: "pending",
+      });
     }
-    if (i % 4 === 2 && env.products.some((p) => p.category === "food"))
-      goals.push({
+    if (hasFood)
+      candidates.push({
         id: `g-${i}-eat`,
         kind: "eat",
         description: "Find food, buy it and eat",
         priority: 0.9,
         status: "pending",
       });
-    if (gates.length && i % 3 === 0)
-      goals = [
+    // Shuffle deterministically so a seed reproduces both task count and mix.
+    for (let index = candidates.length - 1; index > 0; index--) {
+      const swap = Math.floor(goalRng() * (index + 1));
+      [candidates[index], candidates[swap]] = [
+        candidates[swap],
+        candidates[index],
+      ];
+    }
+    let goals = candidates.slice(0, taskCount);
+    if (gates.length && i % 3 === 0) {
+      const journeyGoals: Goal[] = [
         {
           id: `g-${i}-reach`,
           kind: "reach",
@@ -528,6 +539,11 @@ export function compileEnvironment(
           status: "pending",
         },
       ];
+      goals = [
+        ...journeyGoals,
+        ...candidates.slice(0, Math.max(0, taskCount - journeyGoals.length)),
+      ];
+    }
     goals.push({
       id: `g-${i}-exit`,
       kind: "exit",
