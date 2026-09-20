@@ -27,6 +27,52 @@ export const emptyMetrics = (): Metrics => ({
 });
 export const distance = (a: Point, b: Point) =>
   Math.hypot(a.x - b.x, a.z - b.z);
+export function shortestPlacePath(
+  env: Environment,
+  fromPlaceId: string,
+  toPlaceId: string,
+): string[] {
+  if (fromPlaceId === toPlaceId) return [];
+  const distances = new Map(env.places.map((place) => [place.id, Infinity]));
+  const previous = new Map<string, string>();
+  const unvisited = new Set(env.places.map((place) => place.id));
+  distances.set(fromPlaceId, 0);
+  while (unvisited.size) {
+    let current: string | undefined;
+    let best = Infinity;
+    for (const placeId of unvisited) {
+      const candidate = distances.get(placeId) ?? Infinity;
+      if (candidate < best) {
+        current = placeId;
+        best = candidate;
+      }
+    }
+    if (!current || current === toPlaceId) break;
+    unvisited.delete(current);
+    for (const connection of env.connections ?? []) {
+      const neighbor =
+        connection.fromPlaceId === current
+          ? connection.toPlaceId
+          : connection.toPlaceId === current
+            ? connection.fromPlaceId
+            : undefined;
+      if (!neighbor || !unvisited.has(neighbor)) continue;
+      const candidate = best + connection.weight;
+      if (candidate < (distances.get(neighbor) ?? Infinity)) {
+        distances.set(neighbor, candidate);
+        previous.set(neighbor, current);
+      }
+    }
+  }
+  if (!previous.has(toPlaceId)) return [toPlaceId];
+  const path = [toPlaceId];
+  while (path[0] !== fromPlaceId) {
+    const prior = previous.get(path[0]);
+    if (!prior) return [toPlaceId];
+    path.unshift(prior);
+  }
+  return path.slice(1);
+}
 export const clamp = (n: number, min = 0, max = 1) =>
   Math.max(min, Math.min(max, n));
 export const uid = () => crypto.randomUUID();
@@ -324,7 +370,6 @@ export function createTicket(
         name: place.name,
         tags: place.tags,
         capabilities: place.capabilities,
-        distance: Math.round(distance(p.position, place.entry)),
         ...(p.placeId === place.id
           ? {
               occupancy: occupancy(run, place.id),
@@ -422,15 +467,19 @@ export function applyDecision(
   };
   p.currentAction = action;
   if (["move", "leave", "flee"].includes(chosen.type)) {
+    const fromPlaceId = p.placeId;
     const target =
       chosen.type === "move"
         ? env.places.find((x) => x.id === chosen.targetId)!.entry
         : env.exit;
-    action.path = [
-      { x: p.position.x, z: 0 },
-      { x: target.x, z: 0 },
-      { ...target },
-    ];
+    action.path =
+      chosen.type === "move" && fromPlaceId
+        ? shortestPlacePath(env, fromPlaceId, chosen.targetId!).map(
+            (placeId) => ({
+              ...env.places.find((place) => place.id === placeId)!.entry,
+            }),
+          )
+        : [{ ...target }];
     delete p.placeId;
     p.nextDecisionAt = 1e9;
     if (chosen.type === "flee") p.mood = "frightened";
