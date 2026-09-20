@@ -55,15 +55,106 @@ const World = dynamic(() => import("@/ui/World"), {
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const time = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-async function api(path: string, data?: unknown) {
-  const response = await fetch(`/api/${path}`, {
-    method: data === undefined ? "GET" : "POST",
-    headers: data === undefined ? {} : { "Content-Type": "application/json" },
-    body: data === undefined ? undefined : JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Request failed");
-  return result;
+function formatError(e: unknown): string {
+  if (e instanceof ApiError) {
+    const parts: string[] = [];
+    if (e.status) parts.push(`[${e.status}]`);
+    parts.push(e.message);
+    if (Array.isArray(e.issues) && e.issues.length)
+      parts.push(`Issues: ${e.issues.map((i) => String(i)).join("; ")}`);
+    if (e.bodyPreview) parts.push(`Body: ${e.bodyPreview}`);
+    return parts.join(" · ");
+  }
+  if (e instanceof Error) return `${e.name}: ${e.message}`;
+  return typeof e === "string" ? e : "Request failed";
+}
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    public path: string,
+    message: string,
+    public issues?: unknown,
+    public bodyPreview?: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function api(path: string, data?: unknown): Promise<any> {
+  const url = `/api/${path}`;
+  const method = data === undefined ? "GET" : "POST";
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: data === undefined ? {} : { "Content-Type": "application/json" },
+      body: data === undefined ? undefined : JSON.stringify(data),
+    });
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error(`[api] network failure ${method} ${url}`, e);
+    throw new ApiError(0, path, `Network error reaching ${url}: ${detail}`);
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  const isJson = contentType.toLowerCase().includes("application/json");
+  let text = "";
+  try {
+    text = await response.text();
+  } catch (e) {
+    console.error(`[api] could not read body ${method} ${url}`, e);
+    throw new ApiError(
+      response.status,
+      path,
+      `Could not read response body (status ${response.status})`,
+    );
+  }
+  let payload: unknown = undefined;
+  if (text && isJson) {
+    try {
+      payload = JSON.parse(text);
+    } catch (e) {
+      console.error(
+        `[api] response claimed JSON but did not parse ${method} ${url}`,
+        { text: text.slice(0, 400), error: e },
+      );
+      throw new ApiError(
+        response.status,
+        path,
+        `Server sent invalid JSON (status ${response.status})`,
+        undefined,
+        text.slice(0, 200),
+      );
+    }
+  }
+  if (!response.ok) {
+    const record =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : undefined;
+    const serverMessage =
+      typeof record?.error === "string" ? record.error : undefined;
+    const issues = record && "issues" in record ? record.issues : undefined;
+    const preview = !isJson && text ? text.slice(0, 200) : undefined;
+    const message =
+      serverMessage ??
+      (preview
+        ? `HTTP ${response.status} at ${url} · non-JSON response: ${preview.slice(0, 120)}${preview.length > 120 ? "…" : ""}`
+        : `HTTP ${response.status} at ${url}`);
+    console.error(`[api] ${response.status} ${method} ${url}`, {
+      serverMessage,
+      issues,
+      preview,
+      contentType,
+    });
+    throw new ApiError(response.status, path, message, issues, preview);
+  }
+  if (!isJson) {
+    console.warn(
+      `[api] ${method} ${url} returned ${response.status} without JSON content-type (${contentType || "none"})`,
+    );
+  }
+  return payload;
 }
 function Brand() {
   return (
@@ -638,13 +729,20 @@ export default function Page() {
           } catch {}
         }
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         if (alive) {
+          if (event.code !== 1000 && event.code !== 1001)
+            console.warn(
+              `[ws] closed code=${event.code} reason=${event.reason || "(none)"} clean=${event.wasClean}`,
+            );
           setConnected(false);
           retry = setTimeout(connect, 2500);
         }
       };
-      socket.onerror = () => socket?.close();
+      socket.onerror = (event) => {
+        console.error(`[ws] error at ${socket?.url}`, event);
+        socket?.close();
+      };
     };
     api("session")
       .then((state) => {
@@ -655,7 +753,10 @@ export default function Page() {
         }
       })
       .catch((e) => {
-        if (alive) setError(e.message);
+        if (alive) {
+          console.error("[init] session load failed", e);
+          setError(formatError(e));
+        }
       });
     const poll = setInterval(() => {
       if (alive && socket?.readyState !== WebSocket.OPEN)
@@ -663,7 +764,7 @@ export default function Page() {
           .then((s) => {
             if (alive) setSnapshot(s);
           })
-          .catch(() => {});
+          .catch((e) => console.warn("[poll] session poll failed", e));
     }, 5000);
     return () => {
       alive = false;
@@ -690,7 +791,8 @@ export default function Page() {
       if (name !== "events") setSnapshot(result);
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Request failed");
+      console.error(`[command:${name}] failed`, e);
+      setError(formatError(e));
       return false;
     } finally {
       setBusy("");

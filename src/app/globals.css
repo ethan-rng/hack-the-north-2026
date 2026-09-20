@@ -1104,17 +1104,22 @@ label {
   top: 86px;
   left: 50%;
   transform: translateX(-50%);
-  max-width: 600px;
+  max-width: 640px;
   background: #f9ebe1;
   border: 1px solid #e6c8b5;
   box-shadow: 0 5px 20px #43312611;
   padding: 13px 16px;
   display: flex;
   gap: 18px;
-  align-items: center;
+  align-items: flex-start;
   border-radius: 8px;
   color: #9b5e3e;
   font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 .world-loading,
 .scene-fallback {
