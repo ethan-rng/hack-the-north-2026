@@ -495,13 +495,6 @@ label {
   align-items: center;
   gap: 6px;
 }
-.integration-status {
-  position: absolute;
-  bottom: 17px;
-  left: 246px;
-  font-size: 8px;
-  color: #8b9686;
-}
 .entity-list {
   position: absolute;
   top: 96px;
@@ -1209,8 +1202,7 @@ label {
   .event-prompt .primary span {
     display: none;
   }
-  .map-help,
-  .integration-status {
+  .map-help {
     left: 185px;
   }
   .onboarding-copy {
@@ -1347,10 +1339,6 @@ label {
     bottom: 18px;
     left: 15px;
   }
-  .integration-status {
-    bottom: 0;
-    left: 15px;
-  }
   .summary-overlay {
     top: 65px;
     position: fixed;
@@ -1405,8 +1393,7 @@ label {
 .world-metrics {
   left: 50%;
 }
-.map-help,
-.integration-status {
+.map-help {
   left: 20px;
 }
 @media (max-width: 1180px) {
@@ -1419,8 +1406,7 @@ label {
   .world-metrics {
     left: 50%;
   }
-  .map-help,
-  .integration-status {
+  .map-help {
     left: 10px;
   }
 }
@@ -1431,8 +1417,7 @@ label {
   .world-top {
     left: 15px;
   }
-  .map-help,
-  .integration-status {
+  .map-help {
     left: 15px;
   }
 }

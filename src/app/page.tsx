@@ -747,11 +747,11 @@ export default function Page() {
       };
       socket.onclose = (event) => {
         if (alive) {
+          setConnected(false);
           if (event.code !== 1000 && event.code !== 1001)
             console.warn(
               `[ws] closed code=${event.code} reason=${event.reason || "(none)"} clean=${event.wasClean}`,
             );
-          setConnected(false);
           retry = setTimeout(connect, 2500);
         }
       };
@@ -1113,14 +1113,6 @@ export default function Page() {
                     label="Services completed"
                     value={totals!.serviceCompletions}
                   />
-                </div>
-                <div className="integration-status">
-                  {run.jevAccepted} Jev choices accepted
-                  {run.jevFailed > 0
-                    ? ` · ${run.jevFailed} failed decisions recorded`
-                    : ""}{" "}
-                  · {processing ? "Computing" : "Playback uses no inference"} ·{" "}
-                  {connected ? "Connected" : "Reconnecting"}
                 </div>
               </>
             )}
