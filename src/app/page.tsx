@@ -270,7 +270,7 @@ function PersonInspector({
             </p>
           ))
         ) : (
-          <p className="muted">No events perceived yet.</p>
+          <p className="muted">No events received yet.</p>
         )}
       </section>
       <section>
@@ -583,12 +583,7 @@ function EventCard({ event }: { event: Event }) {
         <ChevronDown size={13} />
       </summary>
       <p>{event.description || event.originalText}</p>
-      <small>
-        {event.awareness === "announcement"
-          ? "Environment-wide announcement"
-          : `Local visibility · ${event.radius} units`}{" "}
-        · {event.durationSeconds}s
-      </small>
+      <small>Global event · {event.durationSeconds}s</small>
       {event.approximationNotes.map((n, i) => (
         <p className="muted" key={i}>
           {n}
@@ -1186,8 +1181,8 @@ export default function Page() {
                       <p className="eyebrow">THE RIPPLE EFFECT</p>
                       <h2>Changes to this world.</h2>
                       <p>
-                        Events are interpreted into supported effects. People
-                        react only to what they perceive.
+                        Every event reaches everyone in the scenario. People
+                        react according to their own goals and situation.
                       </p>
                       {run.events.length ? (
                         [...run.events]

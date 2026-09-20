@@ -71,7 +71,7 @@ Setup budgets 42 seconds for search and 35 seconds for synthesis. Source IDs, UR
 
 Events are interpreted by Baseten into a finite registry: discount, stock delta, availability, service capacity/duration, attraction, threat, announcement and scheduled goal target/deadline updates. IDs and parameter ranges are validated. Stock changes persist; temporary effects expire without undoing purchases. Overlapping effects are derived from base settings. The dinosaur is a prepared primitive asset connected to the same threat/perception/Jev path; it causes no unimplemented physical damage.
 
-Local information is learned within its radius; announcements reach the environment. Scheduled goals use a `subjectKey` such as `CC101`. A gate change updates affected passengers' knowledge and goals only when perceived. Generic services do not represent actual airline operations.
+Every event is global: everyone still in the scenario learns it immediately, regardless of distance or its visual location. Jev chooses each person's reaction independently. Mechanical effects retain their specific targets: a store promotion changes that store's offers, and a gate change updates only passengers with the matching `subjectKey`, such as `CC101`. Generic services do not represent actual airline operations.
 
 The generated population is already distributed through the venue, with initial activities and no fabricated sales. Opening the scenario makes no Jev calls and leaves everyone paused. Each event is interpreted, then the backend records exactly **30 simulated seconds** before the browser plays the result and automatically pauses. Playback supports 0.25×, 0.5×, 1×, 2× and 4× speed, pause, and forward/backward scrubbing. Inspectors and metrics follow the selected frame; playback makes no inference requests.
 
@@ -105,7 +105,7 @@ Request bodies are bounded at 4 KiB for text-bearing mutations, event text at 1,
 2. Submit a shop promotion. Wait for 30 simulated seconds to process, then watch playback. Pause, change speed, and scrub while inspecting a person or shop.
 3. Finish Run A after one or more event segments, then reset. Announce a promotion with an extra service slot using free text.
 4. Compare the same-duration results. Outcomes are model-dependent; no purchase lift is scripted.
-5. Reset and introduce a dinosaur in the central plaza. Inspect who perceived it and which actions Jev chose.
+5. Reset and introduce a dinosaur in the central plaza. Inspect how individuals reacted and which actions Jev chose.
 6. Generate an airport with two gate zones and a timed checkpoint. Announce a new gate for journey CC101; inspect affected passengers and unrelated people.
 
 The old batch/Pixi prototype source remains in the repository for teammate reference, but its Next API/report routes are removed and it is not part of this deployment. The canonical implementation is the Cloudflare app described above.

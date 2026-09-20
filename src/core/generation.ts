@@ -56,8 +56,6 @@ export const eventSchema = z.object({
   title: z.string().max(100),
   description: z.string().max(500),
   durationSeconds: z.number().int().min(1).max(3600),
-  awareness: z.enum(["announcement", "local"]),
-  radius: z.number().min(1).max(100),
   placeId: z.string().nullable(),
   visual: z.enum(["dinosaur", "marker"]),
   approximationNotes: z.array(z.string().max(300)).max(8),

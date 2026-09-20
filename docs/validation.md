@@ -2,6 +2,12 @@
 
 The app was exercised with live Baseten Model APIs, Baseten/Exa search, and Jev through Cloudflare Workers AI. No model choices were mocked in the browser or deployment checks.
 
+## Global event update
+
+All 33 unit tests and frontend/Worker type checks pass. Regression coverage checks distant recipients for announcements, attractions, threats and discounts, immediate Jev context delivery, targeted gate updates, exited-person exclusion, duplicate prevention, and legacy stored local events ignoring their old radius.
+
+The deployed airport smoke test submitted a gate-change sign without requesting a terminal-wide announcement. The recording at time zero showed all **40 people** already knew the event. Only the **14 matching passengers** had their goal targets updated; unrelated goals were unchanged. The segment recorded **168 accepted Jev decisions**, zero failures, five purchases and four timed-service completions, then paused at exactly 30 seconds with no further idle calls. New events contain neither an awareness option nor a radius. Production build and deployment passed.
+
 ## Event-driven playback update
 
 The new 30-second processing flow replaces the continuous-run behavior described in the earlier scenario results below. All 28 unit tests pass, including settled initial placement, paused-state guards, exact segment duration, decision budgets, interrupted requests, failure preservation, immutable history, and position interpolation without future stock/budget leakage.

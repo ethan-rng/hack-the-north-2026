@@ -42,8 +42,6 @@ function fixture() {
     status: "interpreting",
     startTimeSeconds: 0,
     durationSeconds: 20,
-    awareness: "announcement",
-    radius: 100,
     position: { x: 0, z: 0 },
     effects: [
       {

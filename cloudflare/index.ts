@@ -239,8 +239,6 @@ export class SimulationSession extends DurableObject<Bindings> {
       status: "interpreting",
       startTimeSeconds: run.time,
       durationSeconds: 300,
-      awareness: "local",
-      radius: 12,
       position: { x: 0, z: 0 },
       effects: [],
       approximationNotes: [],

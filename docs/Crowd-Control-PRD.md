@@ -5,7 +5,7 @@ Delivery: Hack the North MVP, ready before hacking ends
 Team: Julian, product manager and frontend developer; two engineers focused on backend and simulation  
 Audience: The three builders and their coding agents
 
-Updated 2026-09-19: event-driven 30-second processing and recorded playback replace continuous simulation. Pause, speed controls and timeline scrubbing are required.
+Updated 2026-09-19: event-driven 30-second processing and recorded playback replace continuous simulation. Pause, speed controls and timeline scrubbing are required. All events are global; local visibility and awareness radii are removed.
 
 ## 1 Product direction
 
@@ -38,7 +38,7 @@ Research grounds available facts about the environment. Simulated populations, m
 | POW dimension | What the MVP demonstrates |
 | --- | --- |
 | Problem-centric | Explore how interventions affect people, resources, service, and businesses in a relevant setting. |
-| Original | Combine researched environments, generated scenes, heterogeneous people, limited awareness, and shared operational mechanics. |
+| Original | Combine researched environments, generated scenes, heterogeneous people, global event awareness, and shared operational mechanics. |
 | Wow factor | One description becomes a populated world; a typed event changes its behavior; clicking a person or store reveals the consequences. |
 
 The backend's capabilities must be determined by supported simulation mechanics, not by the presence of a matching 3D model. A roller coaster can operate as a timed service without a bespoke moving coaster asset.
@@ -54,7 +54,7 @@ The backend's capabilities must be determined by supported simulation mechanics,
 - A compact generated summary with optional correction through the same description field and an Explore scenario action.
 - Approximately 40 people and six to ten places as the initial performance target, configurable internally. Large real venues may be represented by a clearly disclosed subset or simplified zones.
 - Places with capability-driven interactions, including retail, waiting/gathering, rest, and generic timed services.
-- Goals, budgets where applicable, interests, patience, needs, moods, memory, and limited event awareness for individuals.
+- Goals, budgets where applicable, interests, patience, needs, moods, memory, and global event awareness with individual reactions.
 - Free-text events beyond prepared demo phrases, supported effects, and generic visual fallbacks.
 - Play/pause, 0.25× through 4× speed, and a timeline that scrubs forward and backward through recorded state.
 - Main 3D pane, historical person inspector, selectable places, store product/stock/revenue panes, and relevant non-retail metrics.
@@ -164,9 +164,9 @@ Examples of supported effects include discounts, stock changes, place availabili
 
 Separate a description people can react to from the effects the engine can execute. A strange event may be represented as a local stimulus and generic marker, with unimplemented physical consequences disclosed. If there is no meaningful representation, retain the text and explain the limitation rather than claiming success.
 
-Events resolve existing place/product/person/zone references and specify start, duration, reach, and validated parameters. Missing details use documented defaults visible in the interpretation. Applicable effects expire without deleting history or undoing completed transactions.
+Events resolve existing place/product/person/zone references and specify start, duration, and validated parameters. Missing details use documented defaults visible in the interpretation. Applicable effects expire without deleting history or undoing completed transactions.
 
-Each person's decision context contains its goals, resources, current activity, recent experiences, and perceived surroundings. Local events must not become instant universal knowledge. Announcements can reach the full environment; signs and visible threats have local reach.
+Each person's decision context contains its goals, resources, current activity, recent experiences, and perceived surroundings. Every event immediately becomes known to everyone still in the scenario. Distance, visual location, event wording, and audience do not limit awareness. Individual goals, traits, and constraints still determine reactions; global awareness does not broaden an effect's mechanical targets.
 
 Jev chooses from presently valid actions supplied by the engine. Reconsider when people perceive an event, arrive, encounter unavailable stock or a queue, wait too long, complete an interaction, or approach a deadline. During backend processing, virtual time waits for pending decision batches while activities remain intact. Urgent events may interrupt interruptible activities; normal destination choices should not oscillate every update.
 
@@ -323,15 +323,15 @@ Each active assignment records `personId`, `actionId`, `startedAtSeconds`, and `
 
 A goal has `id`, `kind`, `description`, `targetId` or `targetCategory`, `priority`, optional `quantity`, optional `deadlineSeconds`, and `progress`/`status`. Initial executable goal kinds include buy, eat, visit, receive_service, reach, wait_until, and exit. An unfamiliar semantic goal may map to one of these with a disclosed approximation.
 
-A scheduled goal can have a `subjectKey`, such as a flight reference, to associate a later announcement with affected people. Authoritative target updates and the person's knowledge of them are separate. A passenger must not redirect because an unseen global field changed; the announcement updates its known facts when perceived.
+A scheduled goal can have a `subjectKey`, such as a flight reference, to associate a later announcement with affected people. Everyone learns the event immediately, but only matching passengers have their pending goals and known facts updated. Unrelated people's goals stay unchanged.
 
 People without a numeric budget cannot execute a purchase. Generation supplies a budget for people expected to shop. Demographics are optional; prefer direct goals and constraints over stereotypes.
 
 ### Event
 
-Fields: `id`, `originalText`, `title`, `description`, `status` (interpreting, active, completed, unsupported, failed), `category`, `targets`, `startTimeSeconds`, `durationSeconds` or explicit until-run-end scope, `awareness`, `effects`, and `approximationNotes`.
+Fields: `id`, `originalText`, `title`, `description`, `status` (interpreting, active, completed, unsupported, failed), `category`, `targets`, `startTimeSeconds`, `durationSeconds` or explicit until-run-end scope, `effects`, and `approximationNotes`.
 
-Awareness describes channel and reach: environment-wide announcement, local visibility, proximity/radius, or an audience condition. Event visuals are an optional presentation mapping. Effects use validated targets and parameters from the implemented registry. Completed events remain available in run history so knowledge references still resolve.
+All events have global awareness. There is no configurable channel, visibility radius, or audience filter. Event positions place visuals only; effects still apply to their validated targets. Event visuals are an optional presentation mapping. Effects use validated targets and parameters from the implemented registry. Completed events remain available in run history so knowledge references still resolve.
 
 ### Action and decision
 
@@ -462,7 +462,7 @@ If time is tight, reduce the represented area, research breadth, number of place
 | AC06 | Domain generality | At least two environment types work through the same contracts; one non-retail place completes a generic timed service. |
 | AC07 | Arbitrary event input | New phrasing and an unprepared event are interpreted using supported mechanics or clearly disclosed approximation. |
 | AC08 | Individual decisions | Live Jev decisions use person-specific goals, constraints, and available actions rather than a universal scripted response. |
-| AC09 | Awareness | A local event or target change does not redirect a person before it learns the relevant information. |
+| AC09 | Global awareness | Every active event immediately reaches all people still in the scenario, including distant people; targeted goal changes affect only matching people, and Jev chooses individual reactions. |
 | AC10 | Person inspector | Clicking a person highlights it and updates actual state in the side pane, including after exit. |
 | AC11 | Place inspector | Clicking a store shows changing stock/prices/purchases/revenue; non-retail places show relevant service metrics. |
 | AC12 | Purchase integrity | Concurrent attempts for the last unit yield at most one committed purchase; stock and budgets remain nonnegative. |

@@ -186,8 +186,6 @@ export interface Event {
   status: "interpreting" | "active" | "completed" | "unsupported" | "failed";
   startTimeSeconds: number;
   durationSeconds: number;
-  awareness: "announcement" | "local";
-  radius: number;
   position: Point;
   effects: Effect[];
   approximationNotes: string[];
