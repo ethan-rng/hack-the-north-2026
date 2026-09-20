@@ -191,12 +191,12 @@ try {
     2,
   );
   const zoom = page.getByLabel("Scene zoom", { exact: true });
-  await expect(zoom).toHaveText("Zoom 100%");
+  await expect(zoom).toHaveText("Zoom 175%");
   const canvas = page.locator("canvas");
   await canvas.hover();
   await page.mouse.wheel(0, -200);
-  await expect(zoom).not.toHaveText("Zoom 100%");
-  assert.ok(Number((await zoom.innerText()).match(/(\d+)%/)![1]) > 100);
+  await expect(zoom).not.toHaveText("Zoom 175%");
+  assert.ok(Number((await zoom.innerText()).match(/(\d+)%/)![1]) > 175);
   const metricsBox = await page.locator(".world-metrics").boundingBox();
   const composerBox = await page.locator(".event-composer").boundingBox();
   assert.ok(

@@ -11,6 +11,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Environment, Person, Place, Run } from "@/core/types";
+
+const DEFAULT_ZOOM_PERCENT = 175;
 import { placeOpen, occupancy } from "@/core/engine";
 
 export type HeatMode = "off" | "traffic" | "occupancy" | "revenue" | "wait";
@@ -102,7 +104,7 @@ function Camera({
     <OrthographicCamera
       makeDefault
       position={[center[0] + 42, 42, center[1] + 48]}
-      zoom={fittedZoom}
+      zoom={fittedZoom * (DEFAULT_ZOOM_PERCENT / 100)}
       near={0.1}
       far={300}
     />
@@ -499,7 +501,7 @@ export default function World({
   preview,
   heatMode = "off",
 }: Props) {
-  const [zoomPercent, setZoomPercent] = useState(100);
+  const [zoomPercent, setZoomPercent] = useState(DEFAULT_ZOOM_PERCENT);
   const people = run?.people ?? environment.population;
   const scene = useMemo(() => {
     const xs = [
