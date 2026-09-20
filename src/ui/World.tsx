@@ -2,6 +2,22 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, OrthographicCamera } from "@react-three/drei";
 import { Component, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Bed,
+  Clock3,
+  Eye,
+  Frown,
+  HandHelping,
+  LogIn,
+  LogOut,
+  Navigation,
+  ShoppingBag,
+  Smile,
+  TriangleAlert,
+  Utensils,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import type { Environment, Person, Place, Run } from "@/core/types";
 import { placeOpen, occupancy } from "@/core/engine";
 
@@ -211,7 +227,11 @@ function Building({
         </>
       ) : appearance.asset === "parking_lot" ? (
         <>
-          <Box position={[0, 0.24, 0]} scale={[8.4, 0.05, 6.4]} color="#3f3f3d" />
+          <Box
+            position={[0, 0.24, 0]}
+            scale={[8.4, 0.05, 6.4]}
+            color="#3f3f3d"
+          />
           {[-2.8, -1.4, 0, 1.4, 2.8].map((x) => (
             <Box
               key={`line-${x}`}
@@ -260,11 +280,7 @@ function Building({
             scale={[8.2, 0.2, 5.2]}
             color={closed ? "#a9aaa3" : appearance.color}
           />
-          <Box
-            position={[0, 4, 0]}
-            scale={[8.4, 0.25, 5.4]}
-            color="#5c5c58"
-          />
+          <Box position={[0, 4, 0]} scale={[8.4, 0.25, 5.4]} color="#5c5c58" />
           {[-4.1, -1.4, 1.4, 4.1].map((x) => (
             <Box
               key={`col-${x}`}
@@ -283,7 +299,11 @@ function Building({
               />
             )),
           )}
-          <Box position={[0, 1.2, 2.6]} scale={[1.8, 1.4, 0.1]} color="#385965" />
+          <Box
+            position={[0, 1.2, 2.6]}
+            scale={[1.8, 1.4, 0.1]}
+            color="#385965"
+          />
         </>
       ) : appearance.asset === "attraction" ? (
         <>
@@ -353,6 +373,41 @@ function Walker({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const action = person.currentAction?.type;
+  const actionState: { Icon: LucideIcon; label: string; tone?: string } =
+    action === "eat"
+      ? { Icon: Utensils, label: "Eating" }
+      : action === "flee"
+        ? { Icon: Navigation, label: "Running away", tone: "danger" }
+        : action === "purchase"
+          ? { Icon: ShoppingBag, label: "Shopping" }
+          : action === "join_queue"
+            ? { Icon: Users, label: "Waiting in line" }
+            : action === "receive_service"
+              ? { Icon: HandHelping, label: "Receiving service" }
+              : action === "rest"
+                ? { Icon: Bed, label: "Resting" }
+                : action === "leave"
+                  ? { Icon: LogOut, label: "Leaving" }
+                  : action === "reenter"
+                    ? { Icon: LogIn, label: "Re-entering" }
+                    : action === "move"
+                      ? { Icon: Navigation, label: "Walking" }
+                      : action === "wait"
+                        ? { Icon: Clock3, label: "Waiting" }
+                        : action === "browse"
+                          ? { Icon: Eye, label: "Browsing" }
+                          : { Icon: Eye, label: "Observing" };
+  const moodState: { Icon: LucideIcon; label: string; tone: string } | null =
+    person.mood === "frightened"
+      ? { Icon: TriangleAlert, label: "Afraid", tone: "danger" }
+      : person.mood === "pleased" || person.mood === "happy"
+        ? { Icon: Smile, label: "Happy", tone: "positive" }
+        : person.mood === "frustrated"
+          ? { Icon: Frown, label: "Frustrated", tone: "warn" }
+          : null;
+  const ActionIcon = actionState.Icon;
+  const MoodIcon = moodState?.Icon;
   return (
     <group
       position={[x, 0, z]}
@@ -370,13 +425,39 @@ function Walker({
         <meshStandardMaterial color="#edc9a7" />
       </mesh>
       <Box position={[0, 0.1, 0]} scale={[0.28, 0.3, 0.28]} color="#425568" />
+      <Html
+        position={[0, 1.72, 0]}
+        center
+        zIndexRange={[28, 0]}
+        style={{ pointerEvents: "none" }}
+      >
+        <div
+          className="person-state-icons"
+          aria-label={`${person.displayName}: ${actionState.label}${moodState ? `, ${moodState.label}` : ""}`}
+        >
+          <span
+            className={`person-state-icon ${actionState.tone ?? "action"}`}
+            title={actionState.label}
+          >
+            <ActionIcon size={13} strokeWidth={2.2} aria-hidden="true" />
+          </span>
+          {moodState && MoodIcon && (
+            <span
+              className={`person-state-icon ${moodState.tone}`}
+              title={moodState.label}
+            >
+              <MoodIcon size={13} strokeWidth={2.2} aria-hidden="true" />
+            </span>
+          )}
+        </div>
+      </Html>
       {selected && (
         <>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
             <ringGeometry args={[0.4, 0.54, 24]} />
             <meshBasicMaterial color="#f77053" />
           </mesh>
-          <Html position={[0, 1.9, 0]} center zIndexRange={[30, 0]}>
+          <Html position={[0, 2.35, 0]} center zIndexRange={[30, 0]}>
             <span className="person-label">{person.displayName}</span>
           </Html>
         </>

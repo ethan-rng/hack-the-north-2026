@@ -1499,6 +1499,37 @@ label {
 .person-label.danger {
   background: #ce7753;
 }
+.person-state-icons {
+  display: flex;
+  gap: 2px;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px #263c3c24);
+}
+.person-state-icon {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d7ddce;
+  border-radius: 999px;
+  background: #fffdf4f2;
+  color: #36564c;
+}
+.person-state-icon.positive {
+  border-color: #9ebd91;
+  background: #e7f2df;
+  color: #426c3e;
+}
+.person-state-icon.warn {
+  border-color: #d8b77b;
+  background: #fff0d4;
+  color: #96631d;
+}
+.person-state-icon.danger {
+  border-color: #d58e75;
+  background: #ffe2d8;
+  color: #a8462f;
+}
 .exit-label {
   font-size: 9px;
   color: #73816a;

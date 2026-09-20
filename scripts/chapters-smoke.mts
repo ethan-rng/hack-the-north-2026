@@ -173,6 +173,13 @@ try {
   await expect(page.locator(".event-suggestions")).toHaveCount(0);
   await expect(page.locator(".timeline-chapter-track")).toHaveCount(0);
   await expect(page.locator(".place-label")).toHaveCount(0);
+  const visiblePeople = Number(
+    await page
+      .locator(".world-metrics .metric", { hasText: "People inside" })
+      .locator("strong")
+      .innerText(),
+  );
+  await expect(page.locator(".person-state-icons")).toHaveCount(visiblePeople);
   await expect(page.getByRole("button", { name: /^Checkpoint / })).toHaveCount(
     2,
   );
