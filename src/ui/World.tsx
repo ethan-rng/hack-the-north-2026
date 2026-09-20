@@ -685,9 +685,6 @@ function Dinosaur({ x, z }: { x: number; z: number }) {
         <coneGeometry args={[0.85, 3, 4]} />
         <meshStandardMaterial color="#6f9670" />
       </mesh>
-      <Html position={[0, 5.8, 0]} center>
-        <span className="person-label danger">A very unexpected visitor</span>
-      </Html>
     </group>
   );
 }
