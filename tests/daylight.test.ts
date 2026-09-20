@@ -2,22 +2,20 @@ import { describe, expect, it } from "vitest";
 import { daylightBackgroundForProgress } from "../src/ui/daylight";
 
 describe("daylightBackgroundForProgress", () => {
-  it("moves through muted sunrise, daytime, sunset, and night colors", () => {
+  it("keeps the scene sky color constant throughout playback", () => {
     expect(daylightBackgroundForProgress(0)).toEqual({
-      top: "rgb(226 215 211)",
-      bottom: "rgb(244 235 222)",
+      top: "rgb(238 237 228)",
+      bottom: "rgb(248 246 239)",
     });
-    expect(daylightBackgroundForProgress(0.5)).toEqual({
-      top: "rgb(226 230 225)",
-      bottom: "rgb(242 239 229)",
-    });
-    expect(daylightBackgroundForProgress(1)).toEqual({
-      top: "rgb(48 53 64)",
-      bottom: "rgb(65 65 72)",
-    });
+    expect(daylightBackgroundForProgress(0.5)).toEqual(
+      daylightBackgroundForProgress(0),
+    );
+    expect(daylightBackgroundForProgress(1)).toEqual(
+      daylightBackgroundForProgress(0),
+    );
   });
 
-  it("clamps progress outside the simulation range", () => {
+  it("keeps the same sky for out-of-range progress too", () => {
     expect(daylightBackgroundForProgress(-1)).toEqual(
       daylightBackgroundForProgress(0),
     );
