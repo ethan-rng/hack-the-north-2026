@@ -155,6 +155,7 @@ try {
   );
   await expect(page.locator(".event-suggestions")).toHaveCount(0);
   await expect(page.locator(".timeline-chapter-track")).toHaveCount(0);
+  await expect(page.locator(".place-label")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Checkpoint / })).toHaveCount(
     2,
   );

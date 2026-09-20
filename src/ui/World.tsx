@@ -211,19 +211,6 @@ function Building({
           ))}
         </>
       )}
-      <Html
-        position={[0, appearance.asset === "gate" ? 5.8 : 4.5, 0]}
-        center
-        zIndexRange={[20, 0]}
-      >
-        <button
-          className={`place-label ${selected ? "selected" : ""}`}
-          onClick={onSelect}
-        >
-          {closed && <span className="closed-dot" />}
-          {place.name}
-        </button>
-      </Html>
     </group>
   );
 }
