@@ -255,22 +255,28 @@ function connectedGraph(data: Generated): IndexedConnection[] {
   return connections;
 }
 
+// Desired inter-place distance per weight bucket, in world units. Aligned with
+// the prompt: 1 ≈ neighboring plot, 2 ≈ across a block, 3 ≈ district-away.
+const WEIGHT_DISTANCE = [0, 16, 32, 56] as const;
 function graphLayout(
   count: number,
   connections: IndexedConnection[],
   seed: number,
 ): Point[] {
   const rng = random(seed ^ 0x51f15e);
-  const radius = 13 + count * 1.2;
+  const radius = 22 + count * 1.8;
   const points = Array.from({ length: count }, (_, index) => {
     const angle = (index / count) * Math.PI * 2 - Math.PI / 2;
-    const offset = (rng() - 0.5) * 1.5;
+    const offset = (rng() - 0.5) * 2.5;
     return {
       x: Math.cos(angle) * (radius + offset),
       z: Math.sin(angle) * (radius + offset),
     };
   });
-  for (let iteration = 0; iteration < 220; iteration++) {
+  // Minimum inter-place spacing scales with the largest desired-edge distance
+  // so heavier-weight networks naturally push everything farther apart.
+  const minSpacing = 14;
+  for (let iteration = 0; iteration < 260; iteration++) {
     const forces = points.map(() => ({ x: 0, z: 0 }));
     for (let a = 0; a < count; a++)
       for (let b = a + 1; b < count; b++) {
@@ -278,7 +284,9 @@ function graphLayout(
         const dz = points[b].z - points[a].z;
         const length = Math.max(0.1, Math.hypot(dx, dz));
         const strength =
-          length < 12 ? (12 - length) * 0.09 : Math.min(0.025, 0.7 / length);
+          length < minSpacing
+            ? (minSpacing - length) * 0.11
+            : Math.min(0.03, 1.2 / length);
         const fx = (dx / length) * strength;
         const fz = (dz / length) * strength;
         forces[a].x -= fx;
@@ -292,8 +300,11 @@ function graphLayout(
       const dx = b.x - a.x;
       const dz = b.z - a.z;
       const length = Math.max(0.1, Math.hypot(dx, dz));
-      const desired = 12 + (connection.weight - 1) * 4;
-      const strength = (length - desired) * 0.035;
+      const desired =
+        WEIGHT_DISTANCE[
+          Math.min(WEIGHT_DISTANCE.length - 1, Math.max(1, connection.weight))
+        ];
+      const strength = (length - desired) * 0.04;
       const fx = (dx / length) * strength;
       const fz = (dz / length) * strength;
       forces[connection.from].x += fx;
@@ -301,11 +312,12 @@ function graphLayout(
       forces[connection.to].x -= fx;
       forces[connection.to].z -= fz;
     }
+    // Gentle centering keeps the scene focused without collapsing spacing.
     for (let index = 0; index < count; index++) {
-      forces[index].x -= points[index].x * 0.002;
-      forces[index].z -= points[index].z * 0.002;
-      points[index].x += Math.max(-0.45, Math.min(0.45, forces[index].x));
-      points[index].z += Math.max(-0.45, Math.min(0.45, forces[index].z));
+      forces[index].x -= points[index].x * 0.0009;
+      forces[index].z -= points[index].z * 0.0009;
+      points[index].x += Math.max(-0.6, Math.min(0.6, forces[index].x));
+      points[index].z += Math.max(-0.6, Math.min(0.6, forces[index].z));
     }
   }
   const center = points.reduce(
