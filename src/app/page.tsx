@@ -1354,17 +1354,26 @@ export default function Page() {
                   playback={playback}
                   segments={snapshot?.segments ?? []}
                 />
-                {playback.historical && !playback.playing && !processing && (
-                  <p className="timeline-note">
-                    You are viewing recorded history.{" "}
-                    <button
-                      type="button"
-                      onClick={() => playback.seek(playback.end)}
-                    >
-                      Return to latest state to add an event
-                    </button>
-                  </p>
-                )}
+                <p
+                  className="timeline-note"
+                  style={{
+                    visibility:
+                      playback.historical && !playback.playing && !processing
+                        ? "visible"
+                        : "hidden",
+                  }}
+                  aria-hidden={
+                    !playback.historical || playback.playing || !!processing
+                  }
+                >
+                  You are viewing recorded history.{" "}
+                  <button
+                    type="button"
+                    onClick={() => playback.seek(playback.end)}
+                  >
+                    Return to latest state to add an event
+                  </button>
+                </p>
                 {(snapshot?.segments ?? [])
                   .filter((s) => s.status === "failed")
                   .slice(-1)

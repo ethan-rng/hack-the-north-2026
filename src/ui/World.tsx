@@ -1,7 +1,7 @@
 "use client";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, OrthographicCamera } from "@react-three/drei";
-import { Component, useMemo, type ReactNode } from "react";
+import { Component, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Environment, Person, Place, Run } from "@/core/types";
 import { placeOpen } from "@/core/engine";
 
@@ -17,22 +17,36 @@ function Camera({
   center,
   width,
   depth,
+  onZoomChange,
 }: {
   preview?: boolean;
   center: [number, number];
   width: number;
   depth: number;
+  onZoomChange: (percent: number) => void;
 }) {
   const { size } = useThree();
+  const fittedZoom = Math.max(
+    3,
+    Math.min(
+      preview ? 12 : 14,
+      size.width / (width + 18),
+      size.height / (depth + 12),
+    ),
+  );
+  const lastPercent = useRef<number | undefined>(undefined);
+  useFrame(({ camera }) => {
+    const percent = Math.round((100 * camera.zoom) / fittedZoom);
+    if (percent !== lastPercent.current) {
+      lastPercent.current = percent;
+      onZoomChange(percent);
+    }
+  });
   return (
     <OrthographicCamera
       makeDefault
       position={[center[0] + 42, 42, center[1] + 48]}
-      zoom={Math.min(
-        preview ? 12 : 14,
-        size.width / (width + 18),
-        size.height / (depth + 12),
-      )}
+      zoom={fittedZoom}
       near={0.1}
       far={300}
     />
@@ -330,6 +344,7 @@ export default function World({
   onSelect,
   preview,
 }: Props) {
+  const [zoomPercent, setZoomPercent] = useState(100);
   const people = run?.people ?? environment.population;
   const scene = useMemo(() => {
     const xs = [
@@ -367,164 +382,179 @@ export default function World({
     };
   }, [environment]);
   return (
-    <RenderBoundary environment={environment} onSelect={onSelect}>
-      <Canvas
-        shadows
-        dpr={[1, 1.5]}
-        gl={{ antialias: true }}
-        aria-label="Interactive 3D environment"
-        onPointerMissed={() => onSelect("")}
-      >
-        <color attach="background" args={["#e9ede3"]} />
-        <ambientLight intensity={1.5} />
-        <directionalLight
-          position={[15, 30, 10]}
-          intensity={2.5}
-          castShadow
-          shadow-mapSize={[1024, 1024]}
-          shadow-camera-left={-38}
-          shadow-camera-right={38}
-          shadow-camera-top={30}
-          shadow-camera-bottom={-30}
-          shadow-normalBias={0.08}
-        />
-        <Camera
-          preview={preview}
-          center={scene.center}
-          width={scene.width}
-          depth={scene.depth}
-        />
-        <OrbitControls
-          makeDefault
-          target={[scene.center[0], 0, scene.center[1]]}
-          enablePan
-          minZoom={3}
-          maxZoom={28}
-          minPolarAngle={0.3}
-          maxPolarAngle={Math.PI / 2.3}
-        />
-        <Box
-          position={[scene.center[0], -0.65, scene.center[1]]}
-          scale={[scene.width, 1.1, scene.depth]}
-          color="#c5d2b9"
-        />
-        {(environment.connections ?? []).map((connection) => {
-          const from = environment.places.find(
-            (place) => place.id === connection.fromPlaceId,
-          );
-          const to = environment.places.find(
-            (place) => place.id === connection.toPlaceId,
-          );
-          return from && to ? (
-            <Road
-              key={connection.id}
-              from={[from.entry.x, from.entry.z]}
-              to={[to.entry.x, to.entry.z]}
-              weight={connection.weight}
-            />
-          ) : null;
-        })}
-        <Road
-          from={[environment.exit.x, environment.exit.z]}
-          to={[scene.nearestExitPlace.entry.x, scene.nearestExitPlace.entry.z]}
-        />
-        {environment.places.map((place) => (
-          <group key={place.id}>
-            <Building
-              place={place}
-              appearance={
-                environment.presentation?.[place.id] ?? {
-                  color: "#95a591",
-                  asset: "building",
-                }
-              }
-              selected={selected === place.id}
-              closed={run ? !placeOpen(run, place.id) : false}
-              onSelect={() => onSelect(place.id)}
-            />
-          </group>
-        ))}
-        {[0.12, 0.32, 0.52, 0.72, 0.9].flatMap((ratio) => [
-          <Tree
-            key={`north-${ratio}`}
-            x={scene.minX + scene.width * ratio}
-            z={scene.minZ + 2}
-          />,
-          <Tree
-            key={`south-${ratio}`}
-            x={scene.minX + scene.width * ratio}
-            z={scene.maxZ - 2}
-          />,
-        ])}
-        <Html position={[environment.exit.x, 0.3, environment.exit.z]} center>
-          <span className="exit-label">EXIT ↙</span>
-        </Html>
-        {people
-          .filter((p) => p.presence === "inside")
-          .map((p, i) => {
-            let x = p.position.x,
-              z = p.position.z;
-            if (p.placeId) {
-              x += ((i % 5) - 2) * 0.6;
-              z += ((Math.floor(i / 5) % 3) - 1) * 0.65;
-            }
-            if (run)
-              for (const service of environment.services) {
-                const idx = run.services[service.id].queue.findIndex(
-                  (q) => q.personId === p.id,
-                );
-                if (idx >= 0) {
-                  const place = environment.places.find(
-                    (l) => l.id === service.placeId,
-                  )!;
-                  const dx = place.entry.x - place.position.x;
-                  const dz = place.entry.z - place.position.z;
-                  const length = Math.max(0.1, Math.hypot(dx, dz));
-                  const outwardX = dx / length;
-                  const outwardZ = dz / length;
-                  const side = (idx % 5) * 0.65 - 1.3;
-                  const row = 1 + Math.floor(idx / 5) * 0.7;
-                  x = place.entry.x + outwardX * row - outwardZ * side;
-                  z = place.entry.z + outwardZ * row + outwardX * side;
-                }
-              }
-            return (
-              <Walker
-                key={p.id}
-                person={p}
-                color={environment.presentation?.[p.id]?.color ?? "#95a591"}
-                x={x}
-                z={z}
-                selected={selected === p.id}
-                onSelect={() => onSelect(p.id)}
-              />
+    <>
+      {!preview && (
+        <output
+          className="scene-zoom"
+          aria-label="Scene zoom"
+          title="Zoom relative to the fitted scene view"
+        >
+          Zoom {zoomPercent}%
+        </output>
+      )}
+      <RenderBoundary environment={environment} onSelect={onSelect}>
+        <Canvas
+          shadows
+          dpr={[1, 1.5]}
+          gl={{ antialias: true }}
+          aria-label="Interactive 3D environment"
+          onPointerMissed={() => onSelect("")}
+        >
+          <color attach="background" args={["#e9ede3"]} />
+          <ambientLight intensity={1.5} />
+          <directionalLight
+            position={[15, 30, 10]}
+            intensity={2.5}
+            castShadow
+            shadow-mapSize={[1024, 1024]}
+            shadow-camera-left={-38}
+            shadow-camera-right={38}
+            shadow-camera-top={30}
+            shadow-camera-bottom={-30}
+            shadow-normalBias={0.08}
+          />
+          <Camera
+            preview={preview}
+            center={scene.center}
+            width={scene.width}
+            depth={scene.depth}
+            onZoomChange={setZoomPercent}
+          />
+          <OrbitControls
+            makeDefault
+            target={[scene.center[0], 0, scene.center[1]]}
+            enablePan
+            minZoom={3}
+            maxZoom={28}
+            minPolarAngle={0.3}
+            maxPolarAngle={Math.PI / 2.3}
+          />
+          <Box
+            position={[scene.center[0], -0.65, scene.center[1]]}
+            scale={[scene.width, 1.1, scene.depth]}
+            color="#c5d2b9"
+          />
+          {(environment.connections ?? []).map((connection) => {
+            const from = environment.places.find(
+              (place) => place.id === connection.fromPlaceId,
             );
+            const to = environment.places.find(
+              (place) => place.id === connection.toPlaceId,
+            );
+            return from && to ? (
+              <Road
+                key={connection.id}
+                from={[from.entry.x, from.entry.z]}
+                to={[to.entry.x, to.entry.z]}
+                weight={connection.weight}
+              />
+            ) : null;
           })}
-        {run?.events
-          .filter((e) => e.status === "active")
-          .map((e) =>
-            e.visual === "dinosaur" ? (
-              <Dinosaur key={e.id} x={e.position.x} z={e.position.z} />
-            ) : (
-              <mesh
-                key={e.id}
-                position={[e.position.x, 0.06, e.position.z]}
-                rotation={[-Math.PI / 2, 0, 0]}
-              >
-                <ringGeometry args={[1.7, 2, 32]} />
-                <meshBasicMaterial
-                  color={
-                    e.effects.some((f) => f.kind === "threat")
-                      ? "#e87553"
-                      : "#cbb756"
+          <Road
+            from={[environment.exit.x, environment.exit.z]}
+            to={[
+              scene.nearestExitPlace.entry.x,
+              scene.nearestExitPlace.entry.z,
+            ]}
+          />
+          {environment.places.map((place) => (
+            <group key={place.id}>
+              <Building
+                place={place}
+                appearance={
+                  environment.presentation?.[place.id] ?? {
+                    color: "#95a591",
+                    asset: "building",
                   }
-                  transparent
-                  opacity={0.65}
+                }
+                selected={selected === place.id}
+                closed={run ? !placeOpen(run, place.id) : false}
+                onSelect={() => onSelect(place.id)}
+              />
+            </group>
+          ))}
+          {[0.12, 0.32, 0.52, 0.72, 0.9].flatMap((ratio) => [
+            <Tree
+              key={`north-${ratio}`}
+              x={scene.minX + scene.width * ratio}
+              z={scene.minZ + 2}
+            />,
+            <Tree
+              key={`south-${ratio}`}
+              x={scene.minX + scene.width * ratio}
+              z={scene.maxZ - 2}
+            />,
+          ])}
+          <Html position={[environment.exit.x, 0.3, environment.exit.z]} center>
+            <span className="exit-label">EXIT ↙</span>
+          </Html>
+          {people
+            .filter((p) => p.presence === "inside")
+            .map((p, i) => {
+              let x = p.position.x,
+                z = p.position.z;
+              if (p.placeId) {
+                x += ((i % 5) - 2) * 0.6;
+                z += ((Math.floor(i / 5) % 3) - 1) * 0.65;
+              }
+              if (run)
+                for (const service of environment.services) {
+                  const idx = run.services[service.id].queue.findIndex(
+                    (q) => q.personId === p.id,
+                  );
+                  if (idx >= 0) {
+                    const place = environment.places.find(
+                      (l) => l.id === service.placeId,
+                    )!;
+                    const dx = place.entry.x - place.position.x;
+                    const dz = place.entry.z - place.position.z;
+                    const length = Math.max(0.1, Math.hypot(dx, dz));
+                    const outwardX = dx / length;
+                    const outwardZ = dz / length;
+                    const side = (idx % 5) * 0.65 - 1.3;
+                    const row = 1 + Math.floor(idx / 5) * 0.7;
+                    x = place.entry.x + outwardX * row - outwardZ * side;
+                    z = place.entry.z + outwardZ * row + outwardX * side;
+                  }
+                }
+              return (
+                <Walker
+                  key={p.id}
+                  person={p}
+                  color={environment.presentation?.[p.id]?.color ?? "#95a591"}
+                  x={x}
+                  z={z}
+                  selected={selected === p.id}
+                  onSelect={() => onSelect(p.id)}
                 />
-              </mesh>
-            ),
-          )}
-      </Canvas>
-    </RenderBoundary>
+              );
+            })}
+          {run?.events
+            .filter((e) => e.status === "active")
+            .map((e) =>
+              e.visual === "dinosaur" ? (
+                <Dinosaur key={e.id} x={e.position.x} z={e.position.z} />
+              ) : (
+                <mesh
+                  key={e.id}
+                  position={[e.position.x, 0.06, e.position.z]}
+                  rotation={[-Math.PI / 2, 0, 0]}
+                >
+                  <ringGeometry args={[1.7, 2, 32]} />
+                  <meshBasicMaterial
+                    color={
+                      e.effects.some((f) => f.kind === "threat")
+                        ? "#e87553"
+                        : "#cbb756"
+                    }
+                    transparent
+                    opacity={0.65}
+                  />
+                </mesh>
+              ),
+            )}
+        </Canvas>
+      </RenderBoundary>
+    </>
   );
 }

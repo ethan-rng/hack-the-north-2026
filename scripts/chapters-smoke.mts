@@ -120,8 +120,16 @@ try {
   await expect(
     chapters.getByRole("button", { name: /Chapter 3.*Failed/ }),
   ).toBeDisabled();
+  const latestPanelHeight = (await page
+    .locator(".event-composer")
+    .boundingBox())!.height;
   await first.click();
   await expect(slider).toHaveValue("0");
+  assert.equal(
+    (await page.locator(".event-composer").boundingBox())!.height,
+    latestPanelHeight,
+    "History message must reserve its space",
+  );
   await expect(first).toHaveAttribute("aria-current", "step");
   await second.click();
   await expect(slider).toHaveValue("30");
@@ -150,6 +158,13 @@ try {
   await expect(page.getByRole("button", { name: /^Checkpoint / })).toHaveCount(
     2,
   );
+  const zoom = page.getByLabel("Scene zoom", { exact: true });
+  await expect(zoom).toHaveText("Zoom 100%");
+  const canvas = page.locator("canvas");
+  await canvas.hover();
+  await page.mouse.wheel(0, -200);
+  await expect(zoom).not.toHaveText("Zoom 100%");
+  assert.ok(Number((await zoom.innerText()).match(/(\d+)%/)![1]) > 100);
   const metricsBox = await page.locator(".world-metrics").boundingBox();
   const composerBox = await page.locator(".event-composer").boundingBox();
   assert.ok(
