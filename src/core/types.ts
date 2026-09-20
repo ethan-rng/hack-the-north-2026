@@ -45,6 +45,15 @@ export interface Product {
   basePriceCents: number;
   stockUnits: number;
 }
+export interface PlaceDetails {
+  operatingHours?: string;
+  permit?: string;
+  accessibility?: string;
+  capacityNote?: string;
+  address?: string;
+  parkingSpots?: number;
+  amenities?: string[];
+}
 export interface Place {
   id: string;
   name: string;
@@ -55,6 +64,7 @@ export interface Place {
   admissionCapacity: number;
   position: Point;
   entry: Point;
+  details?: PlaceDetails;
 }
 export interface Service {
   id: string;

@@ -328,8 +328,8 @@ export default function DevPage() {
           <div
             style={{
               position: "absolute",
-              top: 12,
-              left: 12,
+              bottom: 20,
+              left: 20,
               background: "rgba(255,255,255,0.95)",
               border: "1px solid #cfd4c6",
               borderRadius: 8,

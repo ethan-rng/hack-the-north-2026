@@ -47,6 +47,7 @@ import {
   serviceSettings,
 } from "@/core/engine";
 import { compileEnvironment, fallbackConfiguration } from "@/core/generation";
+type HeatMode = "off" | "traffic" | "occupancy" | "revenue" | "wait";
 const World = dynamic(() => import("@/ui/World"), {
   ssr: false,
   loading: () => (
@@ -58,6 +59,43 @@ const World = dynamic(() => import("@/ui/World"), {
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const time = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+function Sparkline({
+  points,
+  width = 60,
+  height = 18,
+  color = "#4b6b3a",
+}: {
+  points: number[];
+  width?: number;
+  height?: number;
+  color?: string;
+}) {
+  if (points.length < 2) return null;
+  const max = Math.max(...points);
+  const min = Math.min(...points);
+  const range = max - min || 1;
+  const step = width / (points.length - 1);
+  const d = points
+    .map((v, i) => {
+      const x = i * step;
+      const y = height - ((v - min) / range) * height;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const last = points[points.length - 1];
+  const lastY = height - ((last - min) / range) * height;
+  return (
+    <svg width={width} height={height} className="sparkline" aria-hidden>
+      <path d={d} fill="none" stroke={color} strokeWidth="1.4" />
+      <circle
+        cx={width}
+        cy={lastY}
+        r="1.6"
+        fill={color}
+      />
+    </svg>
+  );
+}
 function formatError(e: unknown): string {
   if (e instanceof ApiError) {
     const parts: string[] = [];
@@ -423,6 +461,58 @@ function PlaceInspector({
           </span>
         ))}
       </div>
+      {p.details && (
+        <section>
+          <h3>Details</h3>
+          <dl className="detail-grid">
+            {p.details.operatingHours && (
+              <>
+                <dt>Hours</dt>
+                <dd>{p.details.operatingHours}</dd>
+              </>
+            )}
+            {p.details.address && (
+              <>
+                <dt>Address</dt>
+                <dd>{p.details.address}</dd>
+              </>
+            )}
+            {p.details.permit && (
+              <>
+                <dt>Permit</dt>
+                <dd>{p.details.permit}</dd>
+              </>
+            )}
+            {p.details.accessibility && (
+              <>
+                <dt>Accessibility</dt>
+                <dd>{p.details.accessibility}</dd>
+              </>
+            )}
+            {p.details.capacityNote && (
+              <>
+                <dt>Capacity note</dt>
+                <dd>{p.details.capacityNote}</dd>
+              </>
+            )}
+            {typeof p.details.parkingSpots === "number" && (
+              <>
+                <dt>Parking spots</dt>
+                <dd>{p.details.parkingSpots}</dd>
+              </>
+            )}
+          </dl>
+          {p.details.amenities && p.details.amenities.length > 0 && (
+            <div className="inline-tags" style={{ marginTop: 8 }}>
+              {p.details.amenities.map((a) => (
+                <span key={a} className="tag">
+                  {a}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       <section>
         <div className="metrics-grid">
           <Metric label="Visits" value={m.visits} />
@@ -703,6 +793,29 @@ export default function Page() {
   const [connected, setConnected] = useState(false);
   const [editing, setEditing] = useState(false);
   const [list, setList] = useState<"places" | "people">("places");
+  const [heatMode, setHeatMode] = useState<HeatMode>("off");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [gridOpen, setGridOpen] = useState<null | "places" | "people">(null);
+  const [eventLog, setEventLog] = useState<
+    { at: number; text: string; kind: string }[]
+  >([]);
+  const [template, setTemplate] = useState<
+    null | "close" | "discount" | "capacity" | "announce" | "chaos"
+  >(null);
+  const [tplPlaceId, setTplPlaceId] = useState("");
+  const [tplPct, setTplPct] = useState(20);
+  const [tplMinutes, setTplMinutes] = useState(5);
+  const [tplCapacity, setTplCapacity] = useState(1);
+  const [tplAnnounce, setTplAnnounce] = useState("");
+  const [history, setHistory] = useState<{
+    people: number[];
+    purchases: number[];
+    revenue: number[];
+    services: number[];
+  }>({ people: [], purchases: [], revenue: [], services: [] });
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [tickerCollapsed, setTickerCollapsed] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     setPreview(
@@ -838,6 +951,194 @@ export default function Page() {
   const person = run?.people.find((p) => p.id === selected),
     place = env?.places.find((p) => p.id === selected);
   const totals = run ? resultFor(run, "Live").totals : null;
+  useEffect(() => {
+    if (!run || !totals) return;
+    const people = run.people.filter((p) => p.presence === "inside").length;
+    setHistory((h) => {
+      const push = (a: number[], v: number) => {
+        const next = a.length > 60 ? a.slice(-60) : a.slice();
+        next.push(v);
+        return next;
+      };
+      return {
+        people: push(h.people, people),
+        purchases: push(h.purchases, totals.purchases),
+        revenue: push(h.revenue, totals.revenue),
+        services: push(h.services, totals.serviceCompletions),
+      };
+    });
+  }, [run?.runId, run?.time, totals?.purchases, totals?.revenue]);
+  useEffect(() => {
+    if (!run) return;
+    const notable: { at: number; text: string; kind: string }[] = [];
+    for (const p of run.people) {
+      if (p.lastDecision)
+        notable.push({
+          at: p.lastDecision.at,
+          text: `${p.displayName}: ${p.lastDecision.choice}`,
+          kind: "decision",
+        });
+    }
+    for (const e of run.events)
+      notable.push({
+        at: e.startTimeSeconds,
+        text: `${e.title} · ${e.status}`,
+        kind: e.status === "failed" ? "warn" : "event",
+      });
+    notable.sort((a, b) => b.at - a.at);
+    setEventLog(notable.slice(0, 40));
+  }, [run?.runId, run?.time, run?.events.length]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const inField =
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable);
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+        return;
+      }
+      if (e.key === "Escape") {
+        setPaletteOpen(false);
+        setGridOpen(null);
+        setShortcutsOpen(false);
+        return;
+      }
+      if (inField) return;
+      if (e.key === "F1") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      } else if (e.key === "F2") {
+        e.preventDefault();
+        setGridOpen(gridOpen === "places" ? null : "places");
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        setGridOpen(gridOpen === "people" ? null : "people");
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        setPanel("events");
+      } else if (e.key === "F5") {
+        e.preventDefault();
+        setPanel("compare");
+      } else if (e.key === "F6") {
+        e.preventDefault();
+        setPanel(panel === "sources" ? "entity" : "sources");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [gridOpen, panel]);
+  function runPaletteCommand(raw: string): string | null {
+    const q = raw.trim();
+    if (!q) return null;
+    const parts = q.toLowerCase().split(/\s+/);
+    const cmd = parts[0];
+    const rest = q.slice(cmd.length).trim();
+    const findPlace = (query: string) =>
+      env?.places.find(
+        (p) =>
+          p.name.toLowerCase().includes(query.toLowerCase()) ||
+          p.id.toLowerCase() === query.toLowerCase(),
+      );
+    const findPerson = (query: string) =>
+      run?.people.find(
+        (p) =>
+          p.displayName.toLowerCase().includes(query.toLowerCase()) ||
+          p.id.toLowerCase() === query.toLowerCase(),
+      );
+    if (cmd === "close") {
+      const p = findPlace(rest);
+      if (!p) return "No place matched";
+      setText(`Close ${p.name} for 5 minutes`);
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "discount") {
+      const m = rest.match(/^(\d+)\s+(.+)$/);
+      if (!m) return "Usage: discount 20 gate-b4";
+      const p = findPlace(m[2]);
+      if (!p) return "No place matched";
+      setText(`Announce ${m[1]}% off at ${p.name} for 5 minutes`);
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "capacity") {
+      const m = rest.match(/^(\d+)\s+(.+)$/);
+      if (!m) return "Usage: capacity 2 security";
+      const p = findPlace(m[2]);
+      if (!p) return "No place matched";
+      setText(
+        `Set service capacity at ${p.name} to ${m[1]} slots for 5 minutes`,
+      );
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "announce") {
+      if (!rest) return "Usage: announce <message>";
+      setText(`Announce: ${rest}`);
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "heat") {
+      const modes: HeatMode[] = [
+        "off",
+        "traffic",
+        "occupancy",
+        "revenue",
+        "wait",
+      ];
+      if (!(modes as string[]).includes(rest))
+        return `Usage: heat ${modes.join("|")}`;
+      setHeatMode(rest as HeatMode);
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "focus" || cmd === "select") {
+      const p = findPlace(rest) ?? findPerson(rest);
+      if (!p) return "Nothing matched";
+      setSelected(p.id);
+      setPanel("entity");
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "find") {
+      const p = findPlace(rest) ?? findPerson(rest);
+      if (!p) return "Nothing matched";
+      setSelected(p.id);
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "compare" || q === "compare") {
+      setPanel("compare");
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "grid") {
+      setGridOpen(rest === "people" ? "people" : "places");
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "reset") {
+      command("reset");
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "sources") {
+      setPanel("sources");
+      setPaletteOpen(false);
+      return null;
+    }
+    if (cmd === "help" || cmd === "?") {
+      setShortcutsOpen(true);
+      setPaletteOpen(false);
+      return null;
+    }
+    return `Unknown command: ${cmd}`;
+  }
   return (
     <main className={setupView ? "app onboarding" : "app workspace"}>
       <header className="topbar">
@@ -1010,6 +1311,7 @@ export default function Page() {
               run={run}
               selected={selected}
               onSelect={select}
+              heatMode={heatMode}
             />
             {run && (
               <>
@@ -1026,6 +1328,38 @@ export default function Page() {
                     <span>{time(playback.cursor)} recorded</span>
                   </div>
                   <div className="world-actions">
+                    <div className="heat-toggle" role="group" aria-label="Heatmap overlay">
+                      {(
+                        [
+                          ["off", "Off"],
+                          ["traffic", "Traffic"],
+                          ["occupancy", "Live"],
+                          ["revenue", "Revenue"],
+                          ["wait", "Wait"],
+                        ] as [HeatMode, string][]
+                      ).map(([m, label]) => (
+                        <button
+                          key={m}
+                          className={heatMode === m ? "active" : ""}
+                          onClick={() => setHeatMode(m)}
+                          title={`Heatmap: ${label}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setGridOpen(gridOpen ? null : "places")}
+                      title="Places data grid (F2)"
+                    >
+                      Grid
+                    </button>
+                    <button
+                      onClick={() => setPaletteOpen(true)}
+                      title="Command palette (⌘K)"
+                    >
+                      ⌘K
+                    </button>
                     <button
                       onClick={() => setPanel("compare")}
                       title="Compare runs"
@@ -1089,19 +1423,31 @@ export default function Page() {
                     playback…
                   </div>
                 )}
-                <div className="world-metrics">
-                  <Metric
-                    label="People inside"
-                    value={
-                      run.people.filter((p) => p.presence === "inside").length
-                    }
-                  />
-                  <Metric label="Purchases" value={totals!.purchases} />
-                  <Metric label="Revenue" value={money(totals!.revenue)} />
-                  <Metric
-                    label="Services completed"
-                    value={totals!.serviceCompletions}
-                  />
+                <div className="world-metrics z-100">
+                  <div className="metric with-spark">
+                    <span>People inside</span>
+                    <strong>
+                      {
+                        run.people.filter((p) => p.presence === "inside").length
+                      }
+                    </strong>
+                    <Sparkline points={history.people} color="#4b6b3a" />
+                  </div>
+                  <div className="metric with-spark">
+                    <span>Purchases</span>
+                    <strong>{totals!.purchases}</strong>
+                    <Sparkline points={history.purchases} color="#c25c4c" />
+                  </div>
+                  <div className="metric with-spark">
+                    <span>Revenue</span>
+                    <strong>{money(totals!.revenue)}</strong>
+                    <Sparkline points={history.revenue} color="#b48a3d" />
+                  </div>
+                  <div className="metric with-spark">
+                    <span>Services completed</span>
+                    <strong>{totals!.serviceCompletions}</strong>
+                    <Sparkline points={history.services} color="#5f8391" />
+                  </div>
                 </div>
                 <div className="map-help">
                   <Compass size={14} /> Drag to orbit · scroll to zoom · click
@@ -1357,6 +1703,149 @@ export default function Page() {
                       {s.message}
                     </p>
                   ))}
+                <div className="event-templates">
+                  {(
+                    [
+                      ["close", "Close"],
+                      ["discount", "Discount"],
+                      ["capacity", "Capacity"],
+                      ["announce", "Announce"],
+                      ["chaos", "Chaos"],
+                    ] as [typeof template, string][]
+                  ).map(([id, label]) => (
+                    <button
+                      key={id ?? "x"}
+                      type="button"
+                      className={template === id ? "active" : ""}
+                      onClick={() => setTemplate(template === id ? null : id)}
+                      disabled={!canSubmit}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {template && (
+                  <div className="event-template-form">
+                    {(template === "close" ||
+                      template === "discount" ||
+                      template === "capacity") && (
+                      <label>
+                        Place
+                        <select
+                          value={tplPlaceId}
+                          onChange={(e) => setTplPlaceId(e.target.value)}
+                        >
+                          <option value="">Choose…</option>
+                          {env!.places.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {template === "discount" && (
+                      <label>
+                        Percent off
+                        <input
+                          type="number"
+                          min={5}
+                          max={80}
+                          step={5}
+                          value={tplPct}
+                          onChange={(e) =>
+                            setTplPct(Math.max(1, Number(e.target.value) || 0))
+                          }
+                        />
+                      </label>
+                    )}
+                    {template === "capacity" && (
+                      <label>
+                        Slots
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={tplCapacity}
+                          onChange={(e) =>
+                            setTplCapacity(
+                              Math.max(1, Number(e.target.value) || 1),
+                            )
+                          }
+                        />
+                      </label>
+                    )}
+                    {(template === "close" ||
+                      template === "discount" ||
+                      template === "capacity") && (
+                      <label>
+                        Minutes
+                        <input
+                          type="number"
+                          min={1}
+                          max={30}
+                          value={tplMinutes}
+                          onChange={(e) =>
+                            setTplMinutes(
+                              Math.max(1, Number(e.target.value) || 1),
+                            )
+                          }
+                        />
+                      </label>
+                    )}
+                    {template === "announce" && (
+                      <label className="wide">
+                        Message
+                        <input
+                          type="text"
+                          maxLength={200}
+                          placeholder="Boarding for flight 82 begins now"
+                          value={tplAnnounce}
+                          onChange={(e) => setTplAnnounce(e.target.value)}
+                        />
+                      </label>
+                    )}
+                    {template === "chaos" && (
+                      <span className="template-note">
+                        A dinosaur enters the central plaza.
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={
+                        !canSubmit ||
+                        ((template === "close" ||
+                          template === "discount" ||
+                          template === "capacity") &&
+                          !tplPlaceId) ||
+                        (template === "announce" && !tplAnnounce.trim())
+                      }
+                      onClick={() => {
+                        const place = env!.places.find(
+                          (p) => p.id === tplPlaceId,
+                        );
+                        let sentence = "";
+                        if (template === "close" && place)
+                          sentence = `Close ${place.name} for ${tplMinutes} minutes`;
+                        else if (template === "discount" && place)
+                          sentence = `Announce ${tplPct}% off at ${place.name} for ${tplMinutes} minutes`;
+                        else if (template === "capacity" && place)
+                          sentence = `Set service capacity at ${place.name} to ${tplCapacity} slot${tplCapacity === 1 ? "" : "s"} for ${tplMinutes} minutes`;
+                        else if (template === "announce")
+                          sentence = `Announce: ${tplAnnounce.trim()}`;
+                        else if (template === "chaos")
+                          sentence = "A dinosaur enters the central plaza";
+                        if (sentence) {
+                          setText(sentence);
+                          input.current?.focus();
+                        }
+                      }}
+                    >
+                      Fill composer
+                    </button>
+                  </div>
+                )}
                 <div className="event-prompt">
                   <Sparkles size={18} />
                   <textarea
@@ -1422,6 +1911,355 @@ export default function Page() {
           )}
         </>
       )}
+      {run && !setupView && (
+        <>
+          <TerminalTicker
+            log={eventLog}
+            collapsed={tickerCollapsed}
+            onToggle={() => setTickerCollapsed((v) => !v)}
+          />
+          {gridOpen === "places" && env && (
+            <PlacesGrid
+              env={env}
+              run={run}
+              onSelect={(id) => {
+                setSelected(id);
+                setPanel("entity");
+                setGridOpen(null);
+              }}
+              onClose={() => setGridOpen(null)}
+            />
+          )}
+          {gridOpen === "people" && env && (
+            <PeopleGrid
+              env={env}
+              run={run}
+              onSelect={(id) => {
+                setSelected(id);
+                setPanel("entity");
+                setGridOpen(null);
+              }}
+              onClose={() => setGridOpen(null)}
+            />
+          )}
+        </>
+      )}
+      {paletteOpen && (
+        <CommandPalette
+          env={env}
+          run={run}
+          query={paletteQuery}
+          setQuery={setPaletteQuery}
+          onSubmit={runPaletteCommand}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
+      {shortcutsOpen && (
+        <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />
+      )}
     </main>
+  );
+}
+function TerminalTicker({
+  log,
+  collapsed,
+  onToggle,
+}: {
+  log: { at: number; text: string; kind: string }[];
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className={`terminal-ticker ${collapsed ? "collapsed" : ""}`}>
+      <button
+        className="ticker-toggle"
+        onClick={onToggle}
+        aria-label="Toggle ticker"
+      >
+        <span className="tiny-dot" />
+        TICKER · {log.length}
+      </button>
+      {!collapsed && (
+        <div className="ticker-list">
+          {log.length === 0 && <em>No activity yet.</em>}
+          {log.map((entry, i) => (
+            <span key={i} className={`ticker-item ${entry.kind}`}>
+              <b>{time(entry.at)}</b> {entry.text}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+function PlacesGrid({
+  env,
+  run,
+  onSelect,
+  onClose,
+}: {
+  env: Environment;
+  run: Run;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [sort, setSort] = useState<
+    "name" | "occupancy" | "visits" | "revenue" | "wait"
+  >("occupancy");
+  const rows = env.places
+    .map((p) => {
+      const m = run.metrics[p.id];
+      return {
+        p,
+        occupancy: occupancy(run, p.id),
+        visits: m?.visits ?? 0,
+        revenue: m?.revenue ?? 0,
+        wait: m && m.waitSamples ? m.waitTotal / m.waitSamples : 0,
+        purchases: m?.purchases ?? 0,
+        abandonment: m?.abandonment ?? 0,
+      };
+    })
+    .sort((a, b) => {
+      if (sort === "name") return a.p.name.localeCompare(b.p.name);
+      return (b as unknown as Record<string, number>)[sort] -
+        (a as unknown as Record<string, number>)[sort];
+    });
+  return (
+    <div className="grid-modal" onClick={onClose}>
+      <div className="grid-panel" onClick={(e) => e.stopPropagation()}>
+        <header>
+          <strong>PLACES · F2</strong>
+          <button onClick={onClose} aria-label="Close">
+            <X size={14} />
+          </button>
+        </header>
+        <table className="dense-table">
+          <thead>
+            <tr>
+              <th onClick={() => setSort("name")}>Name</th>
+              <th>Type</th>
+              <th onClick={() => setSort("occupancy")}>Live</th>
+              <th>Cap</th>
+              <th onClick={() => setSort("visits")}>Visits</th>
+              <th onClick={() => setSort("revenue")}>Revenue</th>
+              <th onClick={() => setSort("wait")}>Wait (s)</th>
+              <th>Purch</th>
+              <th>Abandon</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(
+              ({ p, occupancy: occ, visits, revenue, wait, purchases, abandonment }) => (
+                <tr key={p.id} onClick={() => onSelect(p.id)}>
+                  <td>{p.name}</td>
+                  <td>{p.typeLabel}</td>
+                  <td className="num">{occ}</td>
+                  <td className="num muted">{p.admissionCapacity}</td>
+                  <td className="num">{visits}</td>
+                  <td className="num">{money(revenue)}</td>
+                  <td className="num">{wait ? wait.toFixed(1) : "—"}</td>
+                  <td className="num">{purchases}</td>
+                  <td className="num">{abandonment}</td>
+                  <td>
+                    <span
+                      className={`tag ${placeOpen(run, p.id) ? "" : "warning"}`}
+                    >
+                      {placeOpen(run, p.id) ? "Open" : "Closed"}
+                    </span>
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+function PeopleGrid({
+  env,
+  run,
+  onSelect,
+  onClose,
+}: {
+  env: Environment;
+  run: Run;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const rows = run.people
+    .slice()
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  return (
+    <div className="grid-modal" onClick={onClose}>
+      <div className="grid-panel" onClick={(e) => e.stopPropagation()}>
+        <header>
+          <strong>PEOPLE · F3</strong>
+          <button onClick={onClose} aria-label="Close">
+            <X size={14} />
+          </button>
+        </header>
+        <table className="dense-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>State</th>
+              <th>Mood</th>
+              <th>Where</th>
+              <th className="num">Budget</th>
+              <th className="num">Stress</th>
+              <th className="num">Hunger</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => {
+              const at = env.places.find((l) => l.id === p.placeId);
+              return (
+                <tr key={p.id} onClick={() => onSelect(p.id)}>
+                  <td>{p.displayName}</td>
+                  <td>{p.roleLabel}</td>
+                  <td>{p.presence}</td>
+                  <td>{p.mood}</td>
+                  <td>{at?.name ?? "—"}</td>
+                  <td className="num">
+                    {p.budgetRemainingCents === null
+                      ? "—"
+                      : money(p.budgetRemainingCents)}
+                  </td>
+                  <td className="num">{Math.round(p.stress * 100)}%</td>
+                  <td className="num">{Math.round(p.hunger * 100)}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+function CommandPalette({
+  env,
+  run,
+  query,
+  setQuery,
+  onSubmit,
+  onClose,
+}: {
+  env?: Environment;
+  run?: Run;
+  query: string;
+  setQuery: (s: string) => void;
+  onSubmit: (raw: string) => string | null;
+  onClose: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const suggestions = ((): { text: string; hint: string }[] => {
+    const q = query.trim().toLowerCase();
+    const base = [
+      { text: "close [place]", hint: "close a place for 5 min" },
+      { text: "discount 20 [place]", hint: "announce 20% off" },
+      { text: "capacity 2 [place]", hint: "set service slots" },
+      { text: "announce [message]", hint: "broadcast announcement" },
+      { text: "heat traffic|occupancy|revenue|wait|off", hint: "toggle heatmap" },
+      { text: "focus [place|person]", hint: "select entity" },
+      { text: "find [query]", hint: "jump to entity" },
+      { text: "compare", hint: "open comparison" },
+      { text: "grid places|people", hint: "open data grid" },
+      { text: "sources", hint: "open sources & assumptions" },
+      { text: "reset", hint: "reset baseline" },
+    ];
+    if (!q) return base;
+    const matches: { text: string; hint: string }[] = base.filter((c) =>
+      c.text.toLowerCase().includes(q),
+    );
+    if (env)
+      for (const p of env.places) {
+        if (p.name.toLowerCase().includes(q))
+          matches.push({ text: `focus ${p.name}`, hint: p.typeLabel });
+      }
+    if (run)
+      for (const p of run.people.slice(0, 8)) {
+        if (p.displayName.toLowerCase().includes(q))
+          matches.push({ text: `focus ${p.displayName}`, hint: p.roleLabel });
+      }
+    return matches.slice(0, 12);
+  })();
+  return (
+    <div className="palette-backdrop" onClick={onClose}>
+      <div className="palette" onClick={(e) => e.stopPropagation()}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const err = onSubmit(query);
+            setError(err);
+            if (!err) setQuery("");
+          }}
+        >
+          <input
+            autoFocus
+            placeholder="Type a command… (close, discount 20 gate-b4, heat traffic, focus alex)"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setError(null);
+            }}
+          />
+        </form>
+        {error && <div className="palette-error">{error}</div>}
+        <ul className="palette-list">
+          {suggestions.map((s, i) => (
+            <li
+              key={i}
+              onClick={() => {
+                const err = onSubmit(s.text.replace(/\[.*?\]/g, "").trim());
+                setError(err);
+              }}
+            >
+              <code>{s.text}</code>
+              <span>{s.hint}</span>
+            </li>
+          ))}
+        </ul>
+        <footer>ESC to close · ↵ to run · ⌘K anywhere</footer>
+      </div>
+    </div>
+  );
+}
+function ShortcutsHelp({ onClose }: { onClose: () => void }) {
+  const rows: [string, string][] = [
+    ["⌘/Ctrl + K", "Open command palette"],
+    ["F1", "This help"],
+    ["F2", "Places data grid"],
+    ["F3", "People data grid"],
+    ["F4", "Events panel"],
+    ["F5", "Compare runs"],
+    ["F6", "Sources & assumptions"],
+    ["ESC", "Close overlays"],
+  ];
+  return (
+    <div className="palette-backdrop" onClick={onClose}>
+      <div className="palette shortcuts" onClick={(e) => e.stopPropagation()}>
+        <header>
+          <strong>KEYBOARD SHORTCUTS</strong>
+          <button onClick={onClose} aria-label="Close">
+            <X size={14} />
+          </button>
+        </header>
+        <table>
+          <tbody>
+            {rows.map(([k, v]) => (
+              <tr key={k}>
+                <th>
+                  <code>{k}</code>
+                </th>
+                <td>{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
