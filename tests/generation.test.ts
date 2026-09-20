@@ -44,6 +44,17 @@ const source = (id: string, excerpt: string): Source => ({
 });
 
 describe("venue-aware generation", () => {
+  it("loads curated Yorkdale and Mars demos without any live research request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const env = { BASETEN_API_KEY: "test", BASETEN_MODEL: "test" } as AIEnv;
+    const yorkdale = await researchEnvironment(env, "Yorkdale shopping", "yorkdale", () => {});
+    const mars = await researchEnvironment(env, "Mars rover mission", "mars", () => {});
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(yorkdale.researchStatus).toBe("succeeded");
+    expect(yorkdale.sources).toHaveLength(4);
+    expect(mars.researchStatus).toBe("succeeded");
+    expect(mars.sources).toHaveLength(3);
+  });
   it.each([
     ["An airport terminal", "airport"],
     ["A shopping mall", "mall"],

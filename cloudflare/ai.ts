@@ -290,6 +290,25 @@ export async function researchEnvironment(
   setupId: string,
   stage: (message: string) => void,
 ): Promise<Environment> {
+  const demoKind = demoKindForDescription(description);
+  if (demoKind) {
+    stage(
+      demoKind === "yorkdale"
+        ? "Loading curated Yorkdale sources and mall demonstration…"
+        : "Loading curated Mars rover sources and base demonstration…",
+    );
+    const environment = buildDemoEnvironment(
+      demoKind,
+      description,
+      [],
+      "succeeded",
+      setupId,
+    );
+    environment.assumptions.unshift(
+      "Live web research was skipped for this curated demo so it opens immediately.",
+    );
+    return environment;
+  }
   let sources: Source[] = [],
     researchStatus: Environment["researchStatus"] = "unavailable";
   const notes: string[] = [];
@@ -401,21 +420,6 @@ export async function researchEnvironment(
       ? `Retrieved ${sources.length} sources. Building and validating the environment…`
       : "Research unavailable. Building a labeled assumption-based environment…",
   );
-  const demoKind = demoKindForDescription(description);
-  if (demoKind) {
-    stage(
-      demoKind === "yorkdale"
-        ? "Preparing the researched Yorkdale mall demonstration…"
-        : "Preparing the Mars base demonstration…",
-    );
-    return buildDemoEnvironment(
-      demoKind,
-      description,
-      sources,
-      researchStatus,
-      setupId,
-    );
-  }
   let generated;
   try {
     generated = (

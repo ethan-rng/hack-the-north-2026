@@ -25,13 +25,14 @@ function event(text: string): Event {
 }
 
 describe("curated demo environments", () => {
-  it("detects natural-language Yorkdale and Mars base prompts", () => {
+  it("detects natural-language Yorkdale, Mars base, and Mars rover prompts", () => {
     expect(demoKindForDescription("Model crowd flow at Yorkdale this afternoon")).toBe(
       "yorkdale",
     );
     expect(demoKindForDescription("Create a Mars base with astronauts")).toBe(
       "mars",
     );
+    expect(demoKindForDescription("Inspect a Mars rover crew")).toBe("mars");
     expect(demoKindForDescription("A downtown shopping district")).toBeUndefined();
   });
 
@@ -101,6 +102,13 @@ describe("curated demo environments", () => {
       true,
     );
     expect(environment.demo?.safePlaceId).toBeTruthy();
+    expect(environment.sources.map((source) => source.url)).toEqual(
+      expect.arrayContaining([
+        "https://science.nasa.gov/mars/facts/",
+        "https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html",
+        "https://science.nasa.gov/mission/mars-2020-perseverance/",
+      ]),
+    );
     const run = newRun(environment);
     const arrival = event("aliens land on Mars");
     expect(applyCuratedDemoEvent(environment, run, arrival)).toBe(true);

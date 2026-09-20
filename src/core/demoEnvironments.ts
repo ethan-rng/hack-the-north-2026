@@ -4,7 +4,7 @@ import type { DemoKind, Environment, Event, Run, Source } from "./types";
 const words = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ");
 export function demoKindForDescription(description: string): DemoKind | undefined {
   if (/\byorkdale\b/i.test(description)) return "yorkdale";
-  if (/\bmars\s+base\b/i.test(description)) return "mars";
+  if (/\bmars\s+(?:base|rover)\b/i.test(description)) return "mars";
   return undefined;
 }
 
@@ -17,6 +17,41 @@ const officialYorkdaleSources = (): Source[] => {
     { id: "yd-yogen", title: "Yogen Früz | Yorkdale Shopping Centre", url: "https://yorkdale.com/store/yogen-fruz", retrievedAt, excerpt: "Yogen Früz® is a world leader in the frozen yogurt category offering made-to-order healthy frozen treats.", topic: "roster" },
   ];
 };
+const officialMarsSources = (): Source[] => {
+  const retrievedAt = new Date().toISOString();
+  return [
+    {
+      id: "mars-facts",
+      title: "Mars: Facts | NASA Science",
+      url: "https://science.nasa.gov/mars/facts/",
+      retrievedAt,
+      excerpt:
+        "Mars is a dusty, cold desert world with a very thin atmosphere.",
+      topic: "identity",
+    },
+    {
+      id: "mars-gravity",
+      title: "Mars Fact Sheet | NASA NSSDC",
+      url: "https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html",
+      retrievedAt,
+      excerpt:
+        "Mars mean surface gravity is 3.73 m/s², about 0.380 of Earth's.",
+      topic: "operations",
+    },
+    {
+      id: "mars-rover",
+      title: "Mars 2020: Perseverance Rover | NASA Science",
+      url: "https://science.nasa.gov/mission/mars-2020-perseverance/",
+      retrievedAt,
+      excerpt:
+        "NASA's Perseverance rover explores Mars and collects rock and regolith samples.",
+      topic: "roster",
+    },
+  ];
+};
+export function curatedDemoSources(kind: DemoKind): Source[] {
+  return kind === "yorkdale" ? officialYorkdaleSources() : officialMarsSources();
+}
 
 type PlaceInput = Generated["places"][number];
 const shop = (
@@ -50,7 +85,7 @@ const yorkdale = (): Generated => ({
   coverage: "Featured tenants are verified through Yorkdale's public directory. The layout, visitor population, stock, prices and operations are illustrative.",
   assumptions: [
     "This is an original mall layout, not a reproduction of Yorkdale’s floor plan.",
-    "Live research runs for each setup; the featured demo roster is stabilized for reliability.",
+    "The featured tenant roster and sources are preselected for a fast, reliable demo.",
   ],
   places: [
     {
@@ -166,14 +201,17 @@ function arrangeYorkdale(environment: Environment) {
 }
 
 export function buildDemoEnvironment(kind: DemoKind, description: string, researched: Source[], researchStatus: Environment["researchStatus"], setupId: string): Environment {
-  const sources = kind === "yorkdale"
-    ? [...officialYorkdaleSources(), ...researched.filter((source) => !/^yd-/.test(source.id))]
-    : researched;
+  const curatedSources = curatedDemoSources(kind);
+  const curatedIds = new Set(curatedSources.map((source) => source.id));
+  const sources = [
+    ...curatedSources,
+    ...researched.filter((source) => !curatedIds.has(source.id)),
+  ];
   const environment = compileEnvironment(kind === "yorkdale" ? yorkdale() : mars(), description, sources, researchStatus, setupId, kind === "yorkdale" ? 20260920 : 342021);
   if (kind === "yorkdale") {
     arrangeYorkdale(environment);
     environment.demo = { kind };
-    environment.assumptions.unshift("Live venue research was run for this setup. The highlighted tenant roster is stabilized for the demo and links to official Yorkdale directory pages.");
+    environment.assumptions.unshift("This curated demo uses preselected official Yorkdale directory sources. The highlighted tenant roster is stabilized for reliability.");
   } else {
     const bunker = environment.places.find((place) => place.name === "Safehouse Bunker");
     environment.demo = { kind, safePlaceId: bunker?.id };
@@ -183,6 +221,7 @@ export function buildDemoEnvironment(kind: DemoKind, description: string, resear
       roleLabel: index % 3 === 0 ? "EVA specialist" : "Mars mission specialist",
       purpose: "Maintain the Mars outpost and return safely to the bunker during an emergency.",
     }));
+    environment.assumptions.unshift("This curated demo uses preselected NASA Mars and rover sources. The base itself is fictional and its layout is illustrative.");
   }
   return environment;
 }
