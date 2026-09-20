@@ -994,9 +994,10 @@ export default function Page() {
   async function runPaletteCommand(raw: string): Promise<string | null> {
     const q = raw.trim();
     if (!q) return null;
-    const parts = q.toLowerCase().split(/\s+/);
+    const commandQuery = q.startsWith("/") ? q.slice(1) : q;
+    const parts = commandQuery.toLowerCase().split(/\s+/);
     const cmd = parts[0];
-    const rest = q.slice(cmd.length).trim();
+    const rest = commandQuery.slice(cmd.length).trim();
     const findPlace = (query: string) =>
       env?.places.find(
         (p) =>
@@ -1043,6 +1044,18 @@ export default function Page() {
     if (cmd === "announce") {
       if (!rest) return "Usage: announce <message>";
       return submitPaletteEvent(`Announce: ${rest}`);
+    }
+    const heatCommandModes: Record<string, HeatMode> = {
+      off: "off",
+      traffic: "traffic",
+      live: "occupancy",
+      revenue: "revenue",
+      wait: "wait",
+    };
+    if (q.startsWith("/") && cmd in heatCommandModes && !rest) {
+      setHeatMode(heatCommandModes[cmd]);
+      setPaletteOpen(false);
+      return null;
     }
     if (cmd === "heat") {
       const modes: HeatMode[] = [
@@ -1267,30 +1280,6 @@ export default function Page() {
               </div>
               {run && (
                   <div className="world-actions">
-                    <div
-                      className="heat-toggle"
-                      role="group"
-                      aria-label="Heatmap overlay"
-                    >
-                      {(
-                        [
-                          ["off", "Off"],
-                          ["traffic", "Traffic"],
-                          ["occupancy", "Live"],
-                          ["revenue", "Revenue"],
-                          ["wait", "Wait"],
-                        ] as [HeatMode, string][]
-                      ).map(([m, label]) => (
-                        <button
-                          key={m}
-                          className={heatMode === m ? "active" : ""}
-                          onClick={() => setHeatMode(m)}
-                          title={`Heatmap: ${label}`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
                     <button
                       onClick={() => setGridOpen(gridOpen ? null : "places")}
                       title="Places data grid (F2)"
@@ -1873,6 +1862,11 @@ function CommandPalette({
   const suggestions = ((): { text: string; hint: string }[] => {
     const q = query.trim().toLowerCase();
     const base = [
+      { text: "/off", hint: "hide heatmap" },
+      { text: "/traffic", hint: "show visitor traffic" },
+      { text: "/live", hint: "show live occupancy" },
+      { text: "/revenue", hint: "show revenue" },
+      { text: "/wait", hint: "show queue wait" },
       { text: "close [place]", hint: "close a place for 5 min" },
       { text: "discount 20 [place]", hint: "announce 20% off" },
       { text: "capacity 2 [place]", hint: "set service slots" },

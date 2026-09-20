@@ -635,30 +635,6 @@ label {
   border-radius: 4px;
   font-size: 11px;
 }
-.heat-toggle {
-  display: inline-flex;
-  border: 1px solid #d9ddcd;
-  border-radius: 6px;
-  overflow: hidden;
-  background: #fbfaf5;
-  margin-right: 4px;
-}
-.heat-toggle button {
-  padding: 6px 9px;
-  font-size: 9px;
-  letter-spacing: 0.6px;
-  color: #6d7867;
-  border-right: 1px solid #e4e5dc;
-  border-radius: 0;
-  min-width: 44px;
-}
-.heat-toggle button:last-child {
-  border-right: 0;
-}
-.heat-toggle button.active {
-  background: var(--ink);
-  color: var(--paper);
-}
 .detail-grid {
   display: grid;
   grid-template-columns: max-content 1fr;
