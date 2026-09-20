@@ -9,6 +9,7 @@ import {
   effectivePrice,
   newRun,
   resultFor,
+  shortestPlacePath,
   tick,
 } from "../src/core/engine";
 import {
@@ -355,25 +356,73 @@ describe("perception, inference and baseline boundaries", () => {
     expect(comparable(a, b)).toBe(true);
     expect(difference(0, 10)).toEqual({ absolute: 10, percent: null });
   });
-  it("generates separated footprints and a reachable central-spine path to every place", () => {
-    const { env } = fixture();
-    for (const place of env.places) {
-      const run = newRun(env),
-        p = run.people[0];
-      action(env, run, p, `move:${place.id}`);
-      expect(p.currentAction?.path).toEqual([
-        { x: p.position.x, z: 0 },
-        { x: place.entry.x, z: 0 },
-        place.entry,
-      ]);
-      advance(env, run, 40);
-      expect(p.placeId).toBe(place.id);
-      for (const other of env.places.filter((p) => p.id !== place.id))
-        expect(
-          Math.abs(place.position.x - other.position.x) >= 8 ||
-            Math.abs(place.position.z - other.position.z) >= 6,
-        ).toBe(true);
+  it("builds a connected weighted layout and uses it only for animated travel", () => {
+    const { env, run } = fixture();
+    expect(env.connections.length).toBeGreaterThanOrEqual(
+      env.places.length - 1,
+    );
+    const physicalLength = (weight: number) => {
+      const lengths = env.connections
+        .filter((connection) => connection.weight === weight)
+        .map((connection) => {
+          const from = env.places.find(
+            (place) => place.id === connection.fromPlaceId,
+          )!;
+          const to = env.places.find(
+            (place) => place.id === connection.toPlaceId,
+          )!;
+          return Math.hypot(
+            from.position.x - to.position.x,
+            from.position.z - to.position.z,
+          );
+        });
+      return lengths.reduce((sum, length) => sum + length, 0) / lengths.length;
+    };
+    expect(physicalLength(3)).toBeGreaterThan(physicalLength(1));
+    const p = run.people[0];
+    const from = env.places[0];
+    const to = env.places.at(-1)!;
+    p.placeId = from.id;
+    p.position = { ...from.entry };
+    const route = shortestPlacePath(env, from.id, to.id);
+    expect(route.at(-1)).toBe(to.id);
+    action(env, run, p, `move:${to.id}`);
+    expect(p.currentAction?.path).toEqual(
+      route.map((placeId) => ({
+        ...env.places.find((place) => place.id === placeId)!.entry,
+      })),
+    );
+    const contextRun = newRun(env);
+    const ticket = createTicket(env, contextRun, contextRun.people[0])!;
+    const contextPlaces = ticket.context.places as Record<string, unknown>[];
+    expect(contextPlaces.every((place) => !("distance" in place))).toBe(true);
+    advance(env, run, 90);
+    expect(p.placeId).toBe(to.id);
+  });
+  it("accepts and lays out up to twelve researched points of interest", () => {
+    const generated = fallbackConfiguration("Large venue");
+    for (let index = 6; index < 12; index++) {
+      generated.places.push({
+        ...structuredClone(generated.places[index % 6]),
+        name: `Additional POI ${index + 1}`,
+      });
+      generated.connections.push({
+        fromPlace: index,
+        toPlace: index + 1,
+        weight: ((index % 3) + 1) as 1 | 2 | 3,
+      });
     }
+    const env = compileEnvironment(
+      generated,
+      "Large venue",
+      [],
+      "unavailable",
+      "twelve",
+    );
+    expect(env.places).toHaveLength(12);
+    expect(
+      shortestPlacePath(env, env.places[0].id, env.places[11].id).at(-1),
+    ).toBe(env.places[11].id);
   });
   it("rejects unknown references and retains unsupported event history", () => {
     const { env, run } = fixture();

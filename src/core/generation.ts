@@ -4,6 +4,8 @@ import {
   type Environment,
   type Goal,
   type Person,
+  type PlaceConnection,
+  type Point,
   type Source,
   type Provenance,
 } from "./types";
@@ -49,7 +51,17 @@ export const generatedSchema = z.object({
       }),
     )
     .min(6)
-    .max(8),
+    .max(12),
+  connections: z
+    .array(
+      z.object({
+        fromPlace: z.number().int().min(1).max(12),
+        toPlace: z.number().int().min(1).max(12),
+        weight: z.number().int().min(1).max(3),
+      }),
+    )
+    .min(5)
+    .max(30),
 });
 export type Generated = z.infer<typeof generatedSchema>;
 export const eventSchema = z.object({
@@ -142,6 +154,116 @@ const colors = [
   "#8ebbad",
   "#d2b26c",
 ];
+
+type IndexedConnection = { from: number; to: number; weight: number };
+
+function connectedGraph(data: Generated): IndexedConnection[] {
+  const count = data.places.length;
+  const parent = Array.from({ length: count }, (_, index) => index);
+  const find = (value: number): number => {
+    while (parent[value] !== value) {
+      parent[value] = parent[parent[value]];
+      value = parent[value];
+    }
+    return value;
+  };
+  const join = (a: number, b: number) => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA !== rootB) parent[rootB] = rootA;
+  };
+  const seen = new Set<string>();
+  const connections: IndexedConnection[] = [];
+  for (const input of data.connections) {
+    const from = input.fromPlace - 1;
+    const to = input.toPlace - 1;
+    if (from < 0 || to < 0 || from >= count || to >= count || from === to)
+      continue;
+    const key = from < to ? `${from}:${to}` : `${to}:${from}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    connections.push({ from, to, weight: input.weight });
+    join(from, to);
+  }
+  // Invalid or sparse model output is repaired into one traversable graph.
+  for (let index = 1; index < count; index++) {
+    if (find(index - 1) === find(index)) continue;
+    const key = `${index - 1}:${index}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      connections.push({ from: index - 1, to: index, weight: 2 });
+    }
+    join(index - 1, index);
+  }
+  return connections;
+}
+
+function graphLayout(
+  count: number,
+  connections: IndexedConnection[],
+  seed: number,
+): Point[] {
+  const rng = random(seed ^ 0x51f15e);
+  const radius = 13 + count * 1.2;
+  const points = Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2 - Math.PI / 2;
+    const offset = (rng() - 0.5) * 1.5;
+    return {
+      x: Math.cos(angle) * (radius + offset),
+      z: Math.sin(angle) * (radius + offset),
+    };
+  });
+  for (let iteration = 0; iteration < 220; iteration++) {
+    const forces = points.map(() => ({ x: 0, z: 0 }));
+    for (let a = 0; a < count; a++)
+      for (let b = a + 1; b < count; b++) {
+        const dx = points[b].x - points[a].x;
+        const dz = points[b].z - points[a].z;
+        const length = Math.max(0.1, Math.hypot(dx, dz));
+        const strength =
+          length < 12 ? (12 - length) * 0.09 : Math.min(0.025, 0.7 / length);
+        const fx = (dx / length) * strength;
+        const fz = (dz / length) * strength;
+        forces[a].x -= fx;
+        forces[a].z -= fz;
+        forces[b].x += fx;
+        forces[b].z += fz;
+      }
+    for (const connection of connections) {
+      const a = points[connection.from];
+      const b = points[connection.to];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const length = Math.max(0.1, Math.hypot(dx, dz));
+      const desired = 12 + (connection.weight - 1) * 4;
+      const strength = (length - desired) * 0.035;
+      const fx = (dx / length) * strength;
+      const fz = (dz / length) * strength;
+      forces[connection.from].x += fx;
+      forces[connection.from].z += fz;
+      forces[connection.to].x -= fx;
+      forces[connection.to].z -= fz;
+    }
+    for (let index = 0; index < count; index++) {
+      forces[index].x -= points[index].x * 0.002;
+      forces[index].z -= points[index].z * 0.002;
+      points[index].x += Math.max(-0.45, Math.min(0.45, forces[index].x));
+      points[index].z += Math.max(-0.45, Math.min(0.45, forces[index].z));
+    }
+  }
+  const center = points.reduce(
+    (sum, point) => ({
+      x: sum.x + point.x / count,
+      z: sum.z + point.z / count,
+    }),
+    { x: 0, z: 0 },
+  );
+  return points.map((point) => ({
+    x: Math.round((point.x - center.x) * 10) / 10,
+    z: Math.round((point.z - center.z) * 10) / 10,
+  }));
+}
+
 export function compileEnvironment(
   generated: Generated,
   description: string,
@@ -152,6 +274,8 @@ export function compileEnvironment(
 ): Environment {
   const data = generatedSchema.parse(generated),
     rng = random(seed);
+  const indexedConnections = connectedGraph(data);
+  const layout = graphLayout(data.places.length, indexedConnections, seed);
   const provenance: Provenance[] = [
     {
       targetPath: "description",
@@ -160,10 +284,11 @@ export function compileEnvironment(
       note: "Scenario instructions take precedence over source material.",
     },
     {
-      targetPath: "layout,population,places.*.capacity,products.*,services.*",
+      targetPath:
+        "layout,connections.*,population,places.*.capacity,products.*,services.*",
       basis: "assumed",
       sourceIds: [],
-      note: "Approximate single-floor layout; 40 synthetic people; all budgets, prices in simulation cents, stock, capacities, timings and preferences are illustrative assumptions, not observed operational data.",
+      note: "Approximate weighted-graph layout; relative connection weights, 40 synthetic people, budgets, prices in simulation cents, stock, capacities, timings and preferences are illustrative assumptions, not observed operational data.",
     },
   ];
   const env: Environment = {
@@ -179,22 +304,27 @@ export function compileEnvironment(
     provenance,
     assumptions: [
       ...data.assumptions,
-      "Layout is an approximate connected single-floor arrangement, not a measured map.",
+      "Layout is an approximate connected weighted graph, not a measured map; edge weights only change visual spacing and travel animation.",
       "40 synthetic people; budgets, prices, stock, capacity, service times and preferences are assumed.",
       "Free non-retail services use independent timed slots. No synchronized rides, screening or boarding rules.",
       "Results illustrate this scenario; they do not forecast real sales or evacuation safety.",
     ],
     places: [],
+    connections: [],
     products: [],
     services: [],
-    exit: { x: -26, z: 0 },
+    exit: { x: 0, z: 0 },
     population: [],
     presentation: {},
   };
   data.places.forEach((input, index) => {
-    const id = `place-${index + 1}`,
-      row = index < 4 ? -1 : 1,
-      x = -18 + (index % 4) * 12;
+    const id = `place-${index + 1}`;
+    const position = layout[index];
+    const inwardLength = Math.max(0.1, Math.hypot(position.x, position.z));
+    const entry = {
+      x: position.x - (position.x / inwardLength) * 4,
+      z: position.z - (position.z / inwardLength) * 4,
+    };
     const caps = new Set(input.capabilities);
     caps.add("visit");
     caps.add("wait");
@@ -213,10 +343,13 @@ export function compileEnvironment(
       tags: input.tags,
       capabilities: [...caps],
       admissionCapacity: input.capacity,
-      position: { x, z: row * 10 },
-      entry: { x, z: row * 5 },
+      position,
+      entry,
     });
-    env.presentation[id] = { color: colors[index], asset: input.asset };
+    env.presentation[id] = {
+      color: colors[index % colors.length],
+      asset: input.asset,
+    };
     input.products.forEach((product, i) =>
       env.products.push({
         id: `${id}-product-${i + 1}`,
@@ -259,6 +392,18 @@ export function compileEnvironment(
         "Illustrative place inferred from the scenario, not independently verified.",
     });
   });
+  env.connections = indexedConnections.map(
+    (connection, index): PlaceConnection => ({
+      id: `connection-${index + 1}`,
+      fromPlaceId: `place-${connection.from + 1}`,
+      toPlaceId: `place-${connection.to + 1}`,
+      weight: connection.weight,
+    }),
+  );
+  env.exit = {
+    x: Math.min(...env.places.map((place) => place.position.x)) - 11,
+    z: 0,
+  };
   // Ensure every scene can demonstrate a generic service, without imposing a venue category.
   if (!env.services.some((s) => s.kind === "timed")) {
     const place =
@@ -386,7 +531,10 @@ export function compileEnvironment(
       fatigue: rng() * 0.35,
       stress: 0,
       mood: "neutral",
-      position: { x: -23 + rng() * 46, z: -2 + rng() * 4 },
+      position: {
+        x: env.exit.x + 2 + rng() * 5,
+        z: env.exit.z - 2 + rng() * 4,
+      },
       presence: "inside",
       currentAction: null,
       knownEventIds: [],
@@ -454,5 +602,14 @@ export function fallbackConfiguration(description: string): Generated {
       sourceIds: [],
       evidenceNote: "Assumed generic fallback.",
     })),
+    connections: [
+      { fromPlace: 1, toPlace: 2, weight: 1 },
+      { fromPlace: 2, toPlace: 3, weight: 2 },
+      { fromPlace: 3, toPlace: 4, weight: 1 },
+      { fromPlace: 4, toPlace: 5, weight: 2 },
+      { fromPlace: 5, toPlace: 6, weight: 1 },
+      { fromPlace: 6, toPlace: 1, weight: 3 },
+      { fromPlace: 2, toPlace: 5, weight: 2 },
+    ],
   };
 }
