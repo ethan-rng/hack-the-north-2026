@@ -17,6 +17,7 @@ const DEFAULT_ZOOM_PERCENT = 175;
 import { placeOpen, occupancy } from "@/core/engine";
 import { BuildingModel } from "@/ui/buildings/primitives";
 import { stylesById } from "@/ui/buildings/styles";
+import { daylightBackgroundForProgress } from "@/ui/daylight";
 
 export type HeatMode = "off" | "traffic" | "occupancy" | "revenue" | "wait";
 type Props = {
@@ -517,6 +518,9 @@ export default function World({
 }: Props) {
   const [zoomPercent, setZoomPercent] = useState(DEFAULT_ZOOM_PERCENT);
   const people = run?.people ?? environment.population;
+  const daylight = daylightBackgroundForProgress(
+    run ? run.time / Math.max(1, run.duration) : 0.2,
+  );
   const scene = useMemo(() => {
     const xs = [
       environment.exit.x,
@@ -567,11 +571,14 @@ export default function World({
         <Canvas
           shadows
           dpr={[1, 1.5]}
-          gl={{ antialias: true }}
+          gl={{ antialias: true, alpha: true }}
+          style={{
+            backgroundColor: daylight.bottom,
+            backgroundImage: `linear-gradient(180deg, ${daylight.top}, ${daylight.bottom})`,
+          }}
           aria-label="Interactive 3D environment"
           onPointerMissed={() => onSelect("")}
         >
-          <color attach="background" args={["#e9ede3"]} />
           <ambientLight intensity={1.5} />
           <directionalLight
             position={[15, 30, 10]}
