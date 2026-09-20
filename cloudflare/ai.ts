@@ -31,6 +31,7 @@ export interface AIEnv {
 // Keep the model identifier fixed so a failover preserves the simulation's
 // interpretation quality and output contract.
 export const WORKERS_AI_FALLBACK_MODEL = "@cf/openai/gpt-oss-120b";
+export const CURATED_DEMO_RESEARCH_DELAY_MS = 5000;
 interface Completion {
   choices?: { message: { content?: string } }[];
   baseten?: {
@@ -294,8 +295,11 @@ export async function researchEnvironment(
   if (demoKind) {
     stage(
       demoKind === "yorkdale"
-        ? "Loading curated Yorkdale sources and mall demonstration…"
-        : "Loading curated Mars rover sources and base demonstration…",
+        ? "Reviewing curated Yorkdale sources and mall demonstration…"
+        : "Reviewing curated Mars rover sources and base demonstration…",
+    );
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, CURATED_DEMO_RESEARCH_DELAY_MS),
     );
     const environment = buildDemoEnvironment(
       demoKind,

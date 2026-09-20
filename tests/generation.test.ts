@@ -13,7 +13,11 @@ import {
 } from "../src/core/engine";
 import { newScenario, settlePopulation } from "../src/core/playback";
 import { inferVenue } from "../src/core/spatial";
-import { researchEnvironment, type AIEnv } from "../cloudflare/ai";
+import {
+  CURATED_DEMO_RESEARCH_DELAY_MS,
+  researchEnvironment,
+  type AIEnv,
+} from "../cloudflare/ai";
 import type { Source, VenueKind } from "../src/core/types";
 
 const compile = (data: Generated, sources: Source[] = []) =>
@@ -47,8 +51,24 @@ describe("venue-aware generation", () => {
   it("loads curated Yorkdale and Mars demos without any live research request", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const env = { BASETEN_API_KEY: "test", BASETEN_MODEL: "test" } as AIEnv;
-    const yorkdale = await researchEnvironment(env, "Yorkdale shopping", "yorkdale", () => {});
-    const mars = await researchEnvironment(env, "Mars rover mission", "mars", () => {});
+    vi.useFakeTimers();
+    const yorkdalePromise = researchEnvironment(
+      env,
+      "Yorkdale shopping",
+      "yorkdale",
+      () => {},
+    );
+    await vi.advanceTimersByTimeAsync(CURATED_DEMO_RESEARCH_DELAY_MS);
+    const yorkdale = await yorkdalePromise;
+    const marsPromise = researchEnvironment(
+      env,
+      "Mars rover mission",
+      "mars",
+      () => {},
+    );
+    await vi.advanceTimersByTimeAsync(CURATED_DEMO_RESEARCH_DELAY_MS);
+    const mars = await marsPromise;
+    vi.useRealTimers();
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(yorkdale.researchStatus).toBe("succeeded");
     expect(yorkdale.sources).toHaveLength(4);
