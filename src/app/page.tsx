@@ -21,6 +21,8 @@ import {
   Layers3,
   LoaderCircle,
   MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
   RotateCcw,
   Sparkles,
   Users,
@@ -86,12 +88,7 @@ function Sparkline({
   return (
     <svg width={width} height={height} className="sparkline" aria-hidden>
       <path d={d} fill="none" stroke={color} strokeWidth="1.4" />
-      <circle
-        cx={width}
-        cy={lastY}
-        r="1.6"
-        fill={color}
-      />
+      <circle cx={width} cy={lastY} r="1.6" fill={color} />
     </svg>
   );
 }
@@ -804,6 +801,7 @@ export default function Page() {
   const [connected, setConnected] = useState(false);
   const [editing, setEditing] = useState(false);
   const [list, setList] = useState<"places" | "people">("places");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [heatMode, setHeatMode] = useState<HeatMode>("off");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState<null | "places" | "people">(null);
@@ -1151,7 +1149,13 @@ export default function Page() {
     return `Unknown command: ${cmd}`;
   }
   return (
-    <main className={setupView ? "app onboarding" : "app workspace"}>
+    <main
+      className={
+        setupView
+          ? "app onboarding"
+          : `app workspace ${sidebarOpen ? "sidebar-open" : "sidebar-collapsed"}`
+      }
+    >
       <header className="topbar">
         <button
           className="brand-button"
@@ -1339,7 +1343,11 @@ export default function Page() {
                     <span>{time(playback.cursor)} recorded</span>
                   </div>
                   <div className="world-actions">
-                    <div className="heat-toggle" role="group" aria-label="Heatmap overlay">
+                    <div
+                      className="heat-toggle"
+                      role="group"
+                      aria-label="Heatmap overlay"
+                    >
                       {(
                         [
                           ["off", "Off"],
@@ -1438,9 +1446,7 @@ export default function Page() {
                   <div className="metric with-spark">
                     <span>People inside</span>
                     <strong>
-                      {
-                        run.people.filter((p) => p.presence === "inside").length
-                      }
+                      {run.people.filter((p) => p.presence === "inside").length}
                     </strong>
                     <Sparkline points={history.people} color="#4b6b3a" />
                   </div>
@@ -1526,7 +1532,29 @@ export default function Page() {
             </div>
           ) : (
             <>
-              <nav className="entity-list" aria-label="Environment entities">
+              <button
+                type="button"
+                className="entity-list-toggle"
+                aria-controls="environment-entities"
+                aria-expanded={sidebarOpen}
+                aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                title={
+                  sidebarOpen ? "Collapse sidebar" : "Browse places and people"
+                }
+                onClick={() => setSidebarOpen((open) => !open)}
+              >
+                {sidebarOpen ? (
+                  <PanelLeftClose size={17} />
+                ) : (
+                  <PanelLeftOpen size={17} />
+                )}
+              </button>
+              <nav
+                id="environment-entities"
+                className="entity-list"
+                aria-label="Environment entities"
+                hidden={!sidebarOpen}
+              >
                 <div className="segmented">
                   <button
                     className={list === "places" ? "active" : ""}
@@ -2012,8 +2040,10 @@ function PlacesGrid({
     })
     .sort((a, b) => {
       if (sort === "name") return a.p.name.localeCompare(b.p.name);
-      return (b as unknown as Record<string, number>)[sort] -
-        (a as unknown as Record<string, number>)[sort];
+      return (
+        (b as unknown as Record<string, number>)[sort] -
+        (a as unknown as Record<string, number>)[sort]
+      );
     });
   return (
     <div className="grid-modal" onClick={onClose}>
@@ -2041,7 +2071,15 @@ function PlacesGrid({
           </thead>
           <tbody>
             {rows.map(
-              ({ p, occupancy: occ, visits, revenue, wait, purchases, abandonment }) => (
+              ({
+                p,
+                occupancy: occ,
+                visits,
+                revenue,
+                wait,
+                purchases,
+                abandonment,
+              }) => (
                 <tr key={p.id} onClick={() => onSelect(p.id)}>
                   <td>{p.name}</td>
                   <td>{p.typeLabel}</td>
@@ -2153,7 +2191,10 @@ function CommandPalette({
       { text: "discount 20 [place]", hint: "announce 20% off" },
       { text: "capacity 2 [place]", hint: "set service slots" },
       { text: "announce [message]", hint: "broadcast announcement" },
-      { text: "heat traffic|occupancy|revenue|wait|off", hint: "toggle heatmap" },
+      {
+        text: "heat traffic|occupancy|revenue|wait|off",
+        hint: "toggle heatmap",
+      },
       { text: "focus [place|person]", hint: "select entity" },
       { text: "find [query]", hint: "jump to entity" },
       { text: "compare", hint: "open comparison" },

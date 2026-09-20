@@ -108,6 +108,24 @@ try {
     await route.fulfill({ json: payload });
   });
   await page.goto(process.env.SMOKE_URL || "http://127.0.0.1:8766");
+  const sidebar = page.getByRole("navigation", {
+    name: "Environment entities",
+  });
+  const sidebarToggle = page.getByRole("button", {
+    name: "Expand sidebar",
+    exact: true,
+  });
+  await expect(sidebar).toBeHidden();
+  await expect(sidebarToggle).toHaveAttribute("aria-expanded", "false");
+  await sidebarToggle.click();
+  await expect(sidebar).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Collapse sidebar", exact: true }),
+  ).toHaveAttribute("aria-expanded", "true");
+  await page
+    .getByRole("button", { name: "Collapse sidebar", exact: true })
+    .click();
+  await expect(sidebar).toBeHidden();
   const slider = page.getByRole("slider", {
     name: "Simulation timeline",
     exact: true,

@@ -884,6 +884,30 @@ label {
   z-index: 25;
   box-shadow: 0 6px 25px #30413005;
 }
+.entity-list-toggle {
+  position: absolute;
+  top: 104px;
+  left: 20px;
+  z-index: 28;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d6ddce;
+  border-radius: 7px;
+  color: var(--ink);
+  background: #fbfaf5;
+  box-shadow: 0 4px 16px #30413012;
+}
+.entity-list-toggle:hover {
+  background: #e9ede1;
+}
+.sidebar-collapsed .entity-list-toggle {
+  top: 145px;
+}
+.sidebar-open .entity-list-toggle {
+  left: 220px;
+}
 .segmented {
   margin: 12px;
   display: flex;
@@ -1556,6 +1580,12 @@ label {
     width: 155px;
     left: 12px;
   }
+  .entity-list-toggle {
+    left: 12px;
+  }
+  .sidebar-open .entity-list-toggle {
+    left: 167px;
+  }
   .world-pane {
     right: 300px;
   }
@@ -1657,6 +1687,16 @@ label {
     margin: 0 15px;
     height: 185px;
     border-radius: 8px;
+  }
+  .entity-list-toggle,
+  .sidebar-open .entity-list-toggle {
+    position: relative;
+    top: auto;
+    left: auto;
+    margin: 12px 15px 0;
+  }
+  .sidebar-collapsed .entity-list-toggle {
+    top: auto;
   }
   .entity-scroll {
     display: flex;
@@ -1761,6 +1801,9 @@ label {
 /* Keep the navigable scene clear of the entity rail. */
 .workspace .world-pane:not(.summary-world) {
   left: 220px;
+}
+.workspace.sidebar-collapsed .world-pane:not(.summary-world) {
+  left: 0;
 }
 .world-top {
   left: 20px;
@@ -2062,6 +2105,9 @@ label {
     padding: 14px 20px;
     max-height: 45dvh;
     overflow-y: auto;
+  }
+  .workspace.sidebar-collapsed .event-composer {
+    left: 0;
   }
 }
 @media (min-width: 1600px) {
