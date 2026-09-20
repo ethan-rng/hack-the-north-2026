@@ -179,7 +179,14 @@ try {
       .locator("strong")
       .innerText(),
   );
-  await expect(page.locator(".person-state-icons")).toHaveCount(visiblePeople);
+  const stateIcons = page.locator(".person-state-icons");
+  assert.ok((await stateIcons.count()) < visiblePeople);
+  assert.ok((await stateIcons.count()) > 0);
+  await expect(
+    page.locator(".person-state-icons .person-state-icon"),
+  ).toHaveCount(0);
+  for (const action of ["Walking", "Waiting", "Resting", "Leaving"])
+    await expect(page.locator(`[title="${action}"]`)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Checkpoint / })).toHaveCount(
     2,
   );

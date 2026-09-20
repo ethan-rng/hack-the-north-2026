@@ -1520,6 +1520,11 @@ label {
   background: #e7f2df;
   color: #426c3e;
 }
+.person-state-icon.need {
+  border-color: #d8aa6d;
+  background: #fff0cf;
+  color: #92591e;
+}
 .person-state-icon.warn {
   border-color: #d8b77b;
   background: #fff0d4;
