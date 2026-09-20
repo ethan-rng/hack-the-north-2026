@@ -5,6 +5,7 @@ import type {
   Effect,
   Environment,
   Event,
+  Goal,
   Metrics,
   Person,
   Point,
@@ -105,6 +106,12 @@ export function movementPath(
 export const clamp = (n: number, min = 0, max = 1) =>
   Math.max(min, Math.min(max, n));
 export const uid = () => crypto.randomUUID();
+// A segment is only 30 simulated seconds. At five world units per second,
+// people can reach a nearby store, make a fresh Jev decision, and still
+// complete a short service or purchase during the recorded response.
+const WALK_SPEED = 5;
+const FLEE_SPEED = 8;
+const MARS_FLEE_SPEED = 10;
 export function newRun(env: Environment, duration = 180): Run {
   return {
     runId: uid(),
@@ -291,6 +298,20 @@ function socialChoices(env: Environment, run: Run, p: Person): Choice[] {
     },
   ];
 }
+function eventResponseGoal(p: Person, now: number) {
+  return p.goals
+    .filter(
+      (goal) =>
+        goal.status === "pending" &&
+        !!goal.sourceEventId &&
+        (goal.expiresAtSeconds === undefined || goal.expiresAtSeconds > now),
+    )
+    .sort(
+      (a, b) =>
+        (b.expiresAtSeconds ?? Number.NEGATIVE_INFINITY) -
+        (a.expiresAtSeconds ?? Number.NEGATIVE_INFINITY),
+    )[0];
+}
 export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
   if (p.presence !== "inside") return [];
   if (
@@ -309,9 +330,26 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
   );
   if (!threatened && p.goals.every((goal) => goal.status === "completed"))
     return socialChoices(env, run, p);
-  const choices: Choice[] = [
-    { id: "wait", type: "wait", label: "Wait here briefly and observe" },
-  ];
+  const choices: Choice[] = [];
+  const response = eventResponseGoal(p, run.time);
+  if (response?.targetId && p.placeId !== response.targetId) {
+    const target = env.places.find((place) => place.id === response.targetId);
+    if (target && placeOpen(run, target.id))
+      choices.push({
+        id: `event-response:${response.id}`,
+        type: response.responseAction ?? "move",
+        targetId: target.id,
+        label:
+          response.responseAction === "flee"
+            ? `Respond to the alert: move quickly to ${target.name}`
+            : `Respond to the current event at ${target.name}`,
+      });
+  }
+  choices.push({
+    id: "wait",
+    type: "wait",
+    label: "Wait here briefly and observe",
+  });
   if (threatened) {
     const threatenedPlaceIds = new Set(
       run.events
@@ -727,6 +765,129 @@ export function activateEvent(env: Environment, run: Run, event: Event) {
   perceiveEvents(env, run);
   run.revision++;
 }
+function belongsToCohort(p: Person, key: string, denominator: number, take: number) {
+  const ordinal = Number(p.id.match(/\d+$/)?.[0] ?? 0);
+  const hash = [...key].reduce(
+    (sum, character) => sum + character.charCodeAt(0),
+    0,
+  );
+  return (ordinal + hash) % denominator < take;
+}
+function addEventResponseGoal(
+  p: Person,
+  event: Event,
+  targetId: string,
+  kind: Goal["kind"],
+  description: string,
+  responseAction: Goal["responseAction"] = "move",
+  targetCategory?: string,
+) {
+  const id = `event-response:${event.id}:${targetId}`;
+  if (p.goals.some((goal) => goal.id === id)) return;
+  p.goals.push({
+    id,
+    kind,
+    targetId,
+    ...(targetCategory ? { targetCategory } : {}),
+    description,
+    sourceEventId: event.id,
+    expiresAtSeconds: event.startTimeSeconds + event.durationSeconds,
+    responseAction,
+    priority: 1.25,
+    status: "pending",
+  });
+}
+function attachEventResponseGoal(
+  env: Environment,
+  run: Run,
+  event: Event,
+  p: Person,
+  effect: Effect,
+) {
+  if (effect.kind === "discount" && effect.targetId) {
+    const product = run.products.find(
+      (candidate) => candidate.id === effect.targetId,
+    );
+    if (
+      product &&
+      p.priceSensitivity >= 0.1 &&
+      belongsToCohort(p, event.id + product.id, 4, 2)
+    ) {
+      const place = env.places.find((candidate) => candidate.id === product.placeId);
+      if (place)
+        addEventResponseGoal(
+          p,
+          event,
+          place.id,
+          "buy",
+          `Respond to event: consider the ${effect.value}% ${product.name} promotion at ${place.name}`,
+          "move",
+          product.category,
+        );
+    }
+    return;
+  }
+  if (effect.kind === "threat") {
+    const threatened = effect.targetId;
+    const safe =
+      env.places.find((place) => place.id === env.demo?.safePlaceId) ??
+      env.places.find(
+        (place) =>
+          place.id !== threatened &&
+          place.capabilities.includes("rest") &&
+          placeOpen(run, place.id),
+      ) ??
+      env.places.find(
+        (place) => place.id !== threatened && placeOpen(run, place.id),
+      );
+    if (safe && belongsToCohort(p, event.id + safe.id, 6, 5))
+      addEventResponseGoal(
+        p,
+        event,
+        safe.id,
+        "visit",
+        `Respond to safety alert: reach ${safe.name}`,
+        "flee",
+      );
+    return;
+  }
+  if (effect.kind === "availability" && effect.targetId && effect.value <= 0) {
+    const affected = p.goals.some(
+      (goal) => goal.status === "pending" && goal.targetId === effect.targetId,
+    );
+    const closed = env.places.find((place) => place.id === effect.targetId);
+    const alternative =
+      closed &&
+      env.places.find(
+        (place) =>
+          place.id !== closed.id &&
+          placeOpen(run, place.id) &&
+          place.capabilities.some((capability) =>
+            closed.capabilities.includes(capability),
+          ),
+      );
+    if (affected && alternative)
+      addEventResponseGoal(
+        p,
+        event,
+        alternative.id,
+        "visit",
+        `Respond to closure: reroute to ${alternative.name}`,
+      );
+    return;
+  }
+  if (effect.kind === "attraction" && effect.targetId) {
+    const place = env.places.find((candidate) => candidate.id === effect.targetId);
+    if (place && belongsToCohort(p, event.id + place.id, 5, 2))
+      addEventResponseGoal(
+        p,
+        event,
+        place.id,
+        "visit",
+        `Respond to event: visit ${place.name}`,
+      );
+  }
+}
 function perceiveEvents(env: Environment, run: Run) {
   for (const event of run.events.filter((e) => e.status === "active")) {
     for (const p of run.people) {
@@ -752,6 +913,7 @@ function perceiveEvents(env: Environment, run: Run) {
             relevant = true;
           }
         } else relevant = true;
+        attachEventResponseGoal(env, run, event, p, effect);
         if (effect.kind === "threat") {
           p.stress = clamp(p.stress + 0.4 * (1 - p.crowdTolerance / 2));
           p.mood = "frightened";
@@ -933,6 +1095,13 @@ export function tick(env: Environment, run: Run, seconds = 1) {
       event.startTimeSeconds + event.durationSeconds <= run.time
     )
       event.status = "completed";
+  for (const p of run.people)
+    p.goals = p.goals.filter(
+      (goal) =>
+        !goal.sourceEventId ||
+        goal.expiresAtSeconds === undefined ||
+        goal.expiresAtSeconds > run.time,
+    );
   perceiveEvents(env, run);
   for (const p of run.people) {
     if (p.presence === "not_arrived") {
@@ -978,9 +1147,9 @@ export function tick(env: Environment, run: Run, seconds = 1) {
         dt *
         (a.type === "flee"
           ? env.demo?.kind === "mars"
-            ? 6
-            : 4
-          : 2);
+            ? MARS_FLEE_SPEED
+            : FLEE_SPEED
+          : WALK_SPEED);
       while (a.path.length && remaining > 0) {
         const next = a.path[0],
           dist = distance(p.position, next);

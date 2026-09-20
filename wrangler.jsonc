@@ -17,6 +17,7 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SimulationSession"] }],
   "vars": {
     "BASETEN_MODEL": "openai/gpt-oss-120b",
+    "ANTHROPIC_RESEARCH_MODEL": "claude-sonnet-4-6",
     "AI_GATEWAY_ID": "crowd-control",
   },
   "observability": { "enabled": true },
