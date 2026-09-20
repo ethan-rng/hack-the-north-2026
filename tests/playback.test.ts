@@ -202,6 +202,31 @@ describe("event-driven recorded simulation", () => {
     expect(sampleRecording([a, b], 0)).toEqual(a);
     expect(a.products[0].stockUnits).toBeGreaterThan(0);
   });
+  it("replays leave and re-entry boundaries without changing history or making calls", () => {
+    const { env, working } = fixture();
+    const p = working.people[0];
+    p.presence = "exited";
+    p.placeId = undefined;
+    p.position = { ...env.exit };
+    p.currentAction = null;
+    const outside = captureFrame(working);
+    tick(env, working);
+    const ticket = createTicket(env, working, p)!;
+    expect(applyDecision(env, working, ticket, "reenter")).toBe(true);
+    const returned = captureFrame(working);
+    const calls = working.jevAccepted;
+    expect(sampleRecording([outside, returned], 0.9)?.people[0].presence).toBe(
+      "exited",
+    );
+    expect(sampleRecording([outside, returned], 1)?.people[0].presence).toBe(
+      "inside",
+    );
+    expect(sampleRecording([outside, returned], 0)?.people[0].presence).toBe(
+      "exited",
+    );
+    expect(working.jevAccepted).toBe(calls);
+    expect(createTicket(env, { ...working, status: "paused" }, p)).toBeNull();
+  });
   it("joins consecutive recordings into one timeline with the new event at the boundary", () => {
     const { base } = fixture();
     const first = captureFrame(base),

@@ -1512,8 +1512,73 @@ label {
   color: #8c977b;
   white-space: nowrap;
 }
+.timeline-chapter-track {
+  display: flex;
+  gap: 3px;
+  margin: 3px 7px 8px;
+}
+.timeline-chapter-track button {
+  flex-basis: 0;
+  min-width: 0;
+  height: 23px;
+  text-align: left;
+  border-left: 2px solid #8a9c7a;
+  border-radius: 3px;
+  background: #e8eddf;
+  color: #526747;
+  font-size: 9px;
+  padding-left: 5px;
+}
+.timeline-chapter-track button[aria-current="step"] {
+  background: #cad9bb;
+  border-left-color: #496140;
+}
+.timeline-chapter-heading {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-top: 12px;
+  font-size: 9px;
+  color: #7e8b72;
+}
+.timeline-chapter-heading b {
+  color: var(--ink);
+}
 .timeline-segments button {
-  border-bottom: 1px solid #bdc8ae;
+  flex: 0 0 180px;
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  padding: 9px 10px;
+  border: 1px solid #dce3d1;
+  border-radius: 6px;
+  white-space: normal;
+}
+.timeline-segments button[aria-current="step"] {
+  background: #e8eddf;
+  border-color: #8a9c7a;
+}
+.timeline-segments button:hover:not(:disabled) {
+  border-color: #617e62;
+}
+.timeline-segments button:disabled {
+  opacity: 0.55;
+}
+.chapter-meta {
+  font-size: 9px;
+  white-space: nowrap;
+}
+.chapter-title {
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .timeline-note {
   font-size: 10px;
@@ -1580,10 +1645,10 @@ label {
   z-index: 35;
 }
 .world-metrics {
-  bottom: 265px;
+  bottom: calc(var(--composer-height, 228px) + 75px);
 }
 .map-help {
-  bottom: 243px;
+  bottom: calc(var(--composer-height, 228px) + 53px);
 }
 @media (max-width: 1180px) {
   .timeline-status {

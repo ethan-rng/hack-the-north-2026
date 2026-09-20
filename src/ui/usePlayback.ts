@@ -143,6 +143,9 @@ export function usePlayback(snapshot?: SessionSnapshot) {
     start,
     end,
     hasFrames: frames.length > 1,
+    loadedSegmentIds: Object.values(recordings)
+      .filter((recording) => recording.runId === runId)
+      .map((recording) => recording.segmentId),
     historical: cursor < (latest?.time ?? 0) - 0.05,
     seek,
     onSubmitted: (id: string) => {

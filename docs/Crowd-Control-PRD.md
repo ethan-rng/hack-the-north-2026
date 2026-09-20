@@ -57,6 +57,7 @@ The backend's capabilities must be determined by supported simulation mechanics,
 - Goals, budgets where applicable, interests, patience, needs, moods, memory, and global event awareness with individual reactions.
 - Free-text events beyond prepared demo phrases, supported effects, and generic visual fallbacks.
 - Play/pause, 0.25× through 4× speed, and a timeline that scrubs forward and backward through recorded state.
+- One labeled chapter per submitted event, with its text, timestamp and processing/failure status. Completed chapters have clickable checkpoints at their start; selecting one pauses playback and shows that recorded state. Highlight the current chapter. Preserve chapters across refresh and clear them on baseline reset.
 - Main 3D pane, historical person inspector, selectable places, store product/stock/revenue panes, and relevant non-retail metrics.
 - Sequential comparison of two runs from the same generated baseline over equal simulated durations.
 - Baseten and Jev through Cloudflare Workers AI used in the running product.
@@ -162,11 +163,11 @@ Accept arbitrary user event text. Interpret semantics and compile executable con
 
 Examples of supported effects include discounts, stock changes, place availability, service capacity/duration changes, attractions, threats, informational announcements, and updates to an existing scheduled goal's target or deadline. The last effect permits a simple gate-change scenario without implementing an airline operations system.
 
-Separate a description people can react to from the effects the engine can execute. A strange event may be represented as a local stimulus and generic marker, with unimplemented physical consequences disclosed. If there is no meaningful representation, retain the text and explain the limitation rather than claiming success.
+Separate a description people can react to from the effects the engine can execute. A strange event may be represented as a globally known stimulus and generic marker, with unimplemented physical consequences disclosed. If there is no meaningful representation, retain the text and explain the limitation rather than claiming success.
 
 Events resolve existing place/product/person/zone references and specify start, duration, and validated parameters. Missing details use documented defaults visible in the interpretation. Applicable effects expire without deleting history or undoing completed transactions.
 
-Each person's decision context contains its goals, resources, current activity, recent experiences, and perceived surroundings. Every event immediately becomes known to everyone still in the scenario. Distance, visual location, event wording, and audience do not limit awareness. Individual goals, traits, and constraints still determine reactions; global awareness does not broaden an effect's mechanical targets.
+Each person's decision context contains its goals, resources, current activity, recent experiences, and perceived surroundings. Every event immediately becomes known to everyone, including people who have left. Distance, visual location, event wording, and audience do not limit awareness. Individual goals, traits, and constraints still determine reactions; global awareness does not broaden an effect's mechanical targets.
 
 Jev chooses from presently valid actions supplied by the engine. Reconsider when people perceive an event, arrive, encounter unavailable stock or a queue, wait too long, complete an interaction, or approach a deadline. During backend processing, virtual time waits for pending decision batches while activities remain intact. Urgent events may interrupt interruptible activities; normal destination choices should not oscillate every update.
 
@@ -337,7 +338,9 @@ All events have global awareness. There is no configurable channel, visibility r
 
 An action records `actionId`, `decisionId`, `runId`, `personId`, `type`, optional `targetId` and `servicePointId`, optional `quantity`, `basedOnRevision`, and `status` (pending, active, completed, cancelled).
 
-Initial action types: move, browse, join_queue, purchase, receive_service, eat, rest, flee, leave, wait. Expose only valid actions for the current person and available place capabilities. Internal navigation or service substates are an engineering choice.
+People may re-enter only after physically completing an exit (leave or flee). While outside, Jev can choose to stay outside or re-enter at the entrance and walk into the venue. Global events reach outside people too. Returning preserves their goals, budget, purchases and history; it does not reset their identity or record a store visit. All decisions remain confined to event-processing segments.
+
+Initial action types: move, browse, join_queue, purchase, receive_service, eat, rest, flee, leave, reenter, wait. Expose only valid actions for the current person and available place capabilities. Internal navigation or service substates are an engineering choice.
 
 Validate relevant dependencies when applying a returned decision. An unrelated world update does not by itself invalidate the decision. A reset, newer decision, unavailable target, changed budget, or critical new event may invalidate it.
 
@@ -462,7 +465,7 @@ If time is tight, reduce the represented area, research breadth, number of place
 | AC06 | Domain generality | At least two environment types work through the same contracts; one non-retail place completes a generic timed service. |
 | AC07 | Arbitrary event input | New phrasing and an unprepared event are interpreted using supported mechanics or clearly disclosed approximation. |
 | AC08 | Individual decisions | Live Jev decisions use person-specific goals, constraints, and available actions rather than a universal scripted response. |
-| AC09 | Global awareness | Every active event immediately reaches all people still in the scenario, including distant people; targeted goal changes affect only matching people, and Jev chooses individual reactions. |
+| AC09 | Global awareness | Every active event immediately reaches all people, including distant people and those who have left; targeted goal changes affect only matching people, and Jev chooses individual reactions. |
 | AC10 | Person inspector | Clicking a person highlights it and updates actual state in the side pane, including after exit. |
 | AC11 | Place inspector | Clicking a store shows changing stock/prices/purchases/revenue; non-retail places show relevant service metrics. |
 | AC12 | Purchase integrity | Concurrent attempts for the last unit yield at most one committed purchase; stock and budgets remain nonnegative. |

@@ -265,7 +265,7 @@ function PersonInspector({
         <h3>Right now</h3>
         <p className="current-action">
           {p.presence === "exited"
-            ? "Exited the environment"
+            ? "Outside — can choose to re-enter"
             : (p.currentAction?.label ?? "Observing the environment")}
         </p>
         <p className="muted">
@@ -689,6 +689,18 @@ function EventCard({ event }: { event: Event }) {
     </details>
   );
 }
+// Keep the scene metrics above the composer as chapter/status rows change its height.
+function observeComposer(node: HTMLFormElement | null) {
+  if (!node) return;
+  const root = node.closest("main");
+  const measure = () =>
+    root?.style.setProperty("--composer-height", `${node.offsetHeight}px`);
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(node);
+  return () => observer.disconnect();
+}
+
 export default function Page() {
   const [snapshot, setSnapshot] = useState<SessionSnapshot>();
   const [description, setDescription] = useState("");
@@ -1333,7 +1345,11 @@ export default function Page() {
                   )}
                 </div>
               </aside>
-              <form className="event-composer" onSubmit={submit}>
+              <form
+                ref={observeComposer}
+                className="event-composer"
+                onSubmit={submit}
+              >
                 <Timeline
                   playback={playback}
                   segments={snapshot?.segments ?? []}

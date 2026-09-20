@@ -101,6 +101,7 @@ export type ActionType =
   | "rest"
   | "flee"
   | "leave"
+  | "reenter"
   | "wait";
 export interface Choice {
   id: string;

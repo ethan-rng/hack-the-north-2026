@@ -235,18 +235,22 @@ describe("perception, inference and baseline boundaries", () => {
         [effect(kind, kind === "discount" ? run.products[0].id : null, 1)],
         { position: { x: 1000, z: 1000 } },
       );
-      for (const p of run.people.filter((p) => p !== exited)) {
+      for (const p of run.people) {
         expect(p.knownEventIds).toContain(event.id);
         const ticket = createTicket(env, run, p)!;
         expect(ticket.context).toMatchObject({
           perceivedEvents: [expect.objectContaining({ title: event.title })],
         });
-        if (kind === "threat")
+        if (kind === "threat" && p.presence === "inside")
           expect(ticket.choices.some((choice) => choice.id === "flee")).toBe(
             true,
           );
       }
-      expect(exited.knownEventIds).not.toContain(event.id);
+      expect(exited.knownEventIds).toContain(event.id);
+      expect(exited.pending?.choices.map((c) => c.id)).toEqual([
+        "wait",
+        "reenter",
+      ]);
       tick(env, run);
       expect(
         run.people[0].knownEventIds.filter((id) => id === event.id),
@@ -341,6 +345,77 @@ describe("perception, inference and baseline boundaries", () => {
     expect(reset.products).toEqual(env.products);
     expect(applyDecision(env, reset, ticket, "leave")).toBe(false);
     expect(reset.time).toBe(0);
+  });
+  it.each(["leave", "flee"])(
+    "allows re-entry only after %s completes and preserves personal history",
+    (exitAction) => {
+      const { env, run } = fixture(),
+        p = run.people[0];
+      if (exitAction === "flee")
+        addEvent(env, run, [effect("threat", null, 1)]);
+      p.position = { x: 0, z: 0 };
+      p.budgetRemainingCents = 1234;
+      p.purchaseIds = ["prior-purchase"];
+      p.goals[0].status = "completed";
+      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
+      action(env, run, p, exitAction);
+      tick(env, run);
+      expect(p.presence).toBe("inside");
+      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
+      advance(env, run, 20);
+      expect(p.presence).toBe("exited");
+      expect(choicesFor(env, run, p).map((c) => c.id)).toEqual([
+        "wait",
+        "reenter",
+      ]);
+      action(env, run, p, "reenter");
+      expect(p.presence).toBe("inside");
+      expect(p.position).toEqual(env.exit);
+      expect(p.currentAction?.type).toBe("reenter");
+      expect(p.placeId).toBeUndefined();
+      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
+      advance(env, run, 15);
+      expect(p.position).toEqual({ x: 0, z: 0 });
+      expect(p.currentAction).toBeNull();
+      expect(p.budgetRemainingCents).toBe(1234);
+      expect(p.purchaseIds).toEqual(["prior-purchase"]);
+      expect(p.goals[0].status).toBe("completed");
+      expect(Object.values(run.metrics).reduce((n, m) => n + m.visits, 0)).toBe(
+        0,
+      );
+      action(env, run, p, "leave");
+      advance(env, run, 15);
+      expect(p.presence).toBe("exited");
+      expect(choicesFor(env, run, p).map((c) => c.id)).toContain("reenter");
+    },
+  );
+  it("lets outside waits finish and new global events prompt a return decision", () => {
+    const { env, run } = fixture(),
+      p = run.people[0];
+    action(env, run, p, "leave");
+    advance(env, run, 30);
+    action(env, run, p, "wait");
+    expect(createTicket(env, run, p)).toBeNull();
+    advance(env, run, 5);
+    const ticket = createTicket(env, run, p)!;
+    expect(ticket.context).toMatchObject({ person: { presence: "exited" } });
+    expect(applyDecision(env, run, ticket, "wait")).toBe(true);
+    const event = addEvent(env, run, [effect("attraction", null, 1)]);
+    expect(p.knownEventIds).toContain(event.id);
+    const returnTicket = createTicket(env, run, p)!;
+    expect(returnTicket.context).toMatchObject({
+      perceivedEvents: [expect.objectContaining({ title: event.title })],
+    });
+    expect(applyDecision(env, run, returnTicket, "reenter")).toBe(true);
+  });
+  it("rejects a re-entry choice if the person is already inside", () => {
+    const { env, run } = fixture(),
+      p = run.people[0];
+    p.presence = "exited";
+    const ticket = createTicket(env, run, p)!;
+    p.presence = "inside";
+    expect(applyDecision(env, run, ticket, "reenter")).toBe(false);
+    expect(run.jevAccepted).toBe(0);
   });
   it("retains exited person records and computes equal-duration comparisons", () => {
     const { env, run } = fixture(),
