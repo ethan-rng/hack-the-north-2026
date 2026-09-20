@@ -100,78 +100,12 @@ code {
 .app {
   min-height: 100dvh;
 }
-.topbar {
-  height: 76px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 34px;
-  background: var(--paper);
-  position: relative;
-  z-index: 40;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -1px;
-  white-space: nowrap;
-}
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--ink);
-  color: #f5edce;
-  margin-right: 10px;
-}
-.brand-light {
-  font-weight: 400;
-}
-.beta {
-  font-size: 8px;
-  letter-spacing: 1px;
-  margin-left: 8px;
-  border: 1px solid #c7cdc0;
-  border-radius: 4px;
-  padding: 3px 4px;
-  color: #6e7d71;
-}
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-}
-.live-badge {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 9px;
-  letter-spacing: 1.6px;
-  font-weight: 600;
-}
-.live-badge i,
 .tiny-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   display: inline-block;
   background: #789d71;
-}
-.live-badge i.offline {
-  background: #dca871;
-}
-.session-name {
-  font-size: 12px;
-  color: #63716a;
-  max-width: 230px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .text-button {
   display: inline-flex;
@@ -213,7 +147,7 @@ code {
 .onboarding-content {
   display: grid;
   grid-template-columns: minmax(400px, 44%) 1fr;
-  min-height: calc(100dvh - 76px);
+  min-height: 100dvh;
 }
 .onboarding-copy {
   padding: 60px 40px 25px 8vw;
@@ -394,7 +328,7 @@ label {
   position: absolute;
   left: 0;
   right: 330px;
-  top: 76px;
+  top: 0;
   bottom: 0;
 }
 .world-pane.summary-world {
@@ -414,22 +348,33 @@ label {
   justify-content: space-between;
   pointer-events: none;
 }
-.run-chip {
+.world-context {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
+  pointer-events: auto;
+  min-width: 0;
+}
+.world-home,
+.world-location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: #fbfaf5eb;
-  padding: 10px 12px;
   border: 1px solid #d5dfcf;
-  border-radius: 7px;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font-size: 10px;
   white-space: nowrap;
 }
-.run-chip strong {
-  font-size: 10px;
+.world-home:hover {
+  background: white;
 }
-.run-chip span:last-child {
-  font-size: 10px;
+.world-location {
   color: #7e897a;
+  max-width: min(32vw, 320px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .world-actions {
   display: flex;
@@ -746,7 +691,7 @@ label {
 }
 .entity-list {
   position: absolute;
-  top: 96px;
+  top: 20px;
   left: 20px;
   bottom: 26px;
   width: 196px;
@@ -776,7 +721,7 @@ label {
 }
 .entity-list-toggle {
   position: absolute;
-  top: 104px;
+  top: 28px;
   left: 20px;
   z-index: 28;
   width: 34px;
@@ -797,7 +742,7 @@ label {
   background: #e9ede1;
 }
 .sidebar-collapsed .entity-list-toggle {
-  top: 145px;
+  top: 69px;
 }
 .sidebar-open .entity-list-toggle {
   left: 220px;
@@ -872,7 +817,7 @@ label {
 .inspector {
   position: absolute;
   right: 0;
-  top: 76px;
+  top: 0;
   bottom: 0;
   width: 330px;
   background: var(--paper);
@@ -1155,7 +1100,7 @@ label {
 }
 .summary-overlay {
   position: absolute;
-  inset: 76px 0 0;
+  inset: 0;
   background: #e9ede344;
   display: flex;
   justify-content: center;
@@ -1397,7 +1342,7 @@ label {
 .error-toast {
   position: fixed;
   z-index: 100;
-  top: 86px;
+  top: 16px;
   left: 50%;
   transform: translateX(-50%);
   max-width: 640px;
@@ -1471,15 +1416,6 @@ label {
   }
 }
 @media (max-width: 1180px) {
-  .topbar {
-    padding: 0 22px;
-  }
-  .topbar-right {
-    gap: 15px;
-  }
-  .session-name {
-    display: none;
-  }
   .entity-list {
     width: 155px;
     left: 12px;
@@ -1515,10 +1451,6 @@ label {
     padding-left: 5vw;
     padding-right: 25px;
   }
-  .run-chip {
-    flex-wrap: wrap;
-    gap: 5px;
-  }
   .world-actions button {
     font-size: 9px;
     padding: 8px;
@@ -1534,16 +1466,6 @@ label {
   }
 }
 @media (max-width: 850px) {
-  .topbar {
-    height: 65px;
-    padding: 0 18px;
-  }
-  .topbar-right .live-badge {
-    display: none;
-  }
-  .brand {
-    font-size: 20px;
-  }
   .onboarding-content {
     display: flex;
     flex-direction: column;
@@ -1676,7 +1598,7 @@ label {
     left: 15px;
   }
   .summary-overlay {
-    top: 65px;
+    top: 0;
     position: fixed;
     padding: 15px;
   }
@@ -1697,15 +1619,12 @@ label {
   .summary-stats {
     gap: 13px;
   }
-  .topbar-right .text-button {
-    font-size: 9px;
-  }
   .preview-caption {
     left: 25px;
   }
   .error-toast {
     width: 90%;
-    top: 74px;
+    top: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

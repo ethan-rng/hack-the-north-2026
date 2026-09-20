@@ -18,6 +18,7 @@ import {
   CircleDot,
   ExternalLink,
   Globe2,
+  House,
   Layers3,
   LoaderCircle,
   MapPin,
@@ -192,17 +193,6 @@ async function api(path: string, data?: unknown): Promise<any> {
     );
   }
   return payload;
-}
-function Brand() {
-  return (
-    <span className="brand">
-      <span className="brand-mark">
-        <CircleDot size={22} />
-      </span>
-      crowd<span className="brand-light">control</span>
-      <span className="beta">LAB</span>
-    </span>
-  );
 }
 function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -797,7 +787,6 @@ export default function Page() {
   >("entity");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [connected, setConnected] = useState(false);
   const [editing, setEditing] = useState(false);
   const [list, setList] = useState<"places" | "people">("places");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -832,9 +821,6 @@ export default function Page() {
       socket = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live`,
       );
-      socket.onopen = () => {
-        if (alive) setConnected(true);
-      };
       socket.onmessage = (e) => {
         if (alive && e.data !== "pong") {
           try {
@@ -844,7 +830,6 @@ export default function Page() {
       };
       socket.onclose = (event) => {
         if (alive) {
-          setConnected(false);
           if (event.code !== 1000 && event.code !== 1001)
             console.warn(
               `[ws] closed code=${event.code} reason=${event.reason || "(none)"} clean=${event.wasClean}`,
@@ -1129,43 +1114,6 @@ export default function Page() {
           : `app workspace ${sidebarOpen ? "sidebar-open" : "sidebar-collapsed"}`
       }
     >
-      <header className="topbar">
-        <button
-          className="brand-button"
-          onClick={() => {
-            if (env) {
-              setEditing(true);
-              setDescription(env.description);
-            }
-          }}
-          aria-label="Describe a new environment"
-        >
-          <Brand />
-        </button>
-        <div className="topbar-right">
-          {env && !setupView && (
-            <>
-              <span className="session-name">{env.name}</span>
-              <button
-                className="text-button"
-                onClick={() =>
-                  setPanel(panel === "sources" ? "entity" : "sources")
-                }
-              >
-                <Globe2 size={15} /> Sources & assumptions
-              </button>
-            </>
-          )}
-          <span className="live-badge">
-            <i className={connected ? "online" : "offline"} />
-            {processing
-              ? "PROCESSING"
-              : playback.playing
-                ? "RECORDED PLAYBACK"
-                : "SCENARIO PAUSED"}
-          </span>
-        </div>
-      </header>
       {error && (
         <div className="error-toast" role="alert">
           {error}
@@ -1301,20 +1249,23 @@ export default function Page() {
               onSelect={select}
               heatMode={heatMode}
             />
-            {run && (
-              <>
-                <div className="world-top">
-                  <div className="run-chip">
-                    <span className="tiny-dot" />
-                    <strong>
-                      {processing
-                        ? "Processing event"
-                        : playback.playing
-                          ? "Playing recording"
-                          : "Scenario paused"}
-                    </strong>
-                    <span>{time(playback.cursor)} recorded</span>
-                  </div>
+            <div className="world-top">
+              <div className="world-context">
+                <button
+                  className="world-home"
+                  onClick={() => {
+                    setEditing(true);
+                    setDescription(env!.description);
+                  }}
+                  title="Return home"
+                >
+                  <House size={14} /> Home
+                </button>
+                <span className="world-location">
+                  <MapPin size={14} /> {env!.name}
+                </span>
+              </div>
+              {run && (
                   <div className="world-actions">
                     <div
                       className="heat-toggle"
@@ -1384,7 +1335,10 @@ export default function Page() {
                         </button>
                       )}
                   </div>
-                </div>
+              )}
+            </div>
+            {run && (
+              <>
                 {processing && (
                   <div className="processing-overlay" role="status">
                     <LoaderCircle className="spin" size={26} />
