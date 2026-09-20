@@ -1,4 +1,11 @@
 import { z } from "zod";
+import { spatialLayout, supportedEvidence } from "./spatial";
+import { contextualPopulation } from "./population";
+
+const evidenceSchema = z.object({
+  sourceIds: z.array(z.string().max(30)).min(1).max(5),
+  quote: z.string().min(1).max(600),
+});
 import {
   capabilities,
   type Environment,
@@ -11,6 +18,9 @@ import {
 } from "./types";
 
 export const generatedSchema = z.object({
+  venueKind: z
+    .enum(["airport", "mall", "neighborhood", "park", "small_venue", "generic"])
+    .optional(),
   name: z.string().min(1).max(100),
   summary: z.string().max(600),
   coverage: z.string().max(600),
@@ -18,6 +28,40 @@ export const generatedSchema = z.object({
   places: z
     .array(
       z.object({
+        zone: z.string().max(60).optional(),
+        footprint: z
+          .object({
+            width: z.number().min(4).max(24),
+            depth: z.number().min(4).max(24),
+          })
+          .optional(),
+        geographic: z
+          .object({
+            latitude: z.number().min(-85).max(85),
+            longitude: z.number().min(-180).max(180),
+            evidence: evidenceSchema,
+          })
+          .optional(),
+        fieldEvidence: z
+          .array(
+            z.object({
+              field: z.enum([
+                "name",
+                "description",
+                "zone",
+                "operatingHours",
+                "address",
+                "permit",
+                "accessibility",
+                "capacityNote",
+                "parkingSpots",
+                "amenities",
+              ]),
+              evidence: evidenceSchema,
+            }),
+          )
+          .max(12)
+          .optional(),
         name: z.string().min(1).max(80),
         typeLabel: z.string().max(60),
         description: z.string().max(240),
@@ -287,7 +331,13 @@ export function compileEnvironment(
   const data = generatedSchema.parse(generated),
     rng = random(seed);
   const indexedConnections = connectedGraph(data);
-  const layout = graphLayout(data.places.length, indexedConnections, seed);
+  const spatial = spatialLayout(
+    data,
+    description,
+    sources,
+    graphLayout(data.places.length, indexedConnections, seed),
+  );
+  const layout = spatial.places;
   const provenance: Provenance[] = [
     {
       targetPath: "description",
@@ -296,11 +346,10 @@ export function compileEnvironment(
       note: "Scenario instructions take precedence over source material.",
     },
     {
-      targetPath:
-        "layout,connections.*,population,places.*.capacity,products.*,services.*",
+      targetPath: "population,places.*.capacity,products.*,services.*",
       basis: "assumed",
       sourceIds: [],
-      note: "Approximate weighted-graph layout; relative connection weights, 40 synthetic people, budgets, prices in simulation cents, stock, capacities, timings and preferences are illustrative assumptions, not observed operational data.",
+      note: "Synthetic visitor cohorts, budgets, prices in simulation cents, stock, capacities, timings and preferences are illustrative assumptions, not observed operational data.",
     },
   ];
   const env: Environment = {
@@ -316,8 +365,8 @@ export function compileEnvironment(
     provenance,
     assumptions: [
       ...data.assumptions,
-      "Layout is an approximate connected weighted graph, not a measured map; edge weights only change visual spacing and travel animation.",
-      "40 synthetic people; budgets, prices, stock, capacity, service times and preferences are assumed.",
+      ...spatial.info.notes,
+      "Population cohorts and arrival schedules are synthetic; budgets, prices, stock, capacity, service times and preferences are assumed. Groups share purposes but make individual decisions.",
       "Free non-retail services use independent timed slots. No synchronized rides, screening or boarding rules.",
       "Results illustrate this scenario; they do not forecast real sales or evacuation safety.",
     ],
@@ -325,18 +374,14 @@ export function compileEnvironment(
     connections: [],
     products: [],
     services: [],
-    exit: { x: 0, z: 0 },
+    exit: spatial.exit,
+    layout: spatial.info,
     population: [],
     presentation: {},
   };
   data.places.forEach((input, index) => {
     const id = `place-${index + 1}`;
-    const position = layout[index];
-    const inwardLength = Math.max(0.1, Math.hypot(position.x, position.z));
-    const entry = {
-      x: position.x - (position.x / inwardLength) * 4,
-      z: position.z - (position.z / inwardLength) * 4,
-    };
+    const { position, entry, footprint, zone, geographic } = layout[index];
     const caps = new Set(input.capabilities);
     caps.add("visit");
     caps.add("wait");
@@ -347,9 +392,7 @@ export function compileEnvironment(
     } else caps.delete("purchase");
     if (input.products.some((p) => p.category === "food")) caps.add("eat");
     if (caps.has("receive_service")) caps.add("queue");
-    const details: NonNullable<
-      import("./types").Place["details"]
-    > = {};
+    const details: NonNullable<import("./types").Place["details"]> = {};
     if (input.operatingHours) details.operatingHours = input.operatingHours;
     if (input.permit) details.permit = input.permit;
     if (input.accessibility) details.accessibility = input.accessibility;
@@ -370,6 +413,9 @@ export function compileEnvironment(
       admissionCapacity: input.capacity,
       position,
       entry,
+      footprint,
+      zone,
+      geographic,
       ...(Object.keys(details).length ? { details } : {}),
     });
     env.presentation[id] = {
@@ -407,16 +453,39 @@ export function compileEnvironment(
         durationSeconds: input.serviceSeconds,
         interruptible: input.interruptible,
       });
-    const sourceIds = input.sourceIds.filter((id) =>
-      sources.some((s) => s.id === id),
-    );
+    const fields = [
+      "name",
+      "description",
+      "zone",
+      ...Object.keys(details),
+    ] as const;
+    for (const field of fields) {
+      const evidence = input.fieldEvidence?.find(
+        (item) => item.field === field,
+      )?.evidence;
+      const sourceIds = supportedEvidence(evidence, sources);
+      provenance.push({
+        targetPath: `places.${id}.${field === "name" || field === "description" || field === "zone" ? field : `details.${field}`}`,
+        basis: sourceIds.length ? "researched" : "assumed",
+        sourceIds,
+        note: sourceIds.length
+          ? evidence!.quote
+          : "Illustrative value; no field-specific supporting excerpt was retrieved.",
+      });
+    }
     provenance.push({
-      targetPath: `places.${id}.name,description`,
-      basis: sourceIds.length ? "researched" : "inferred",
-      sourceIds,
-      note:
-        input.evidenceNote ||
-        "Illustrative place inferred from the scenario, not independently verified.",
+      targetPath: `places.${id}.position`,
+      basis: geographic ? "researched" : "assumed",
+      sourceIds: geographic?.sourceIds ?? [],
+      note: geographic
+        ? "Projected from coordinates explicitly present in retrieved evidence. Footprint and paths remain illustrative."
+        : "Placed by the venue template; not a measured location.",
+    });
+    provenance.push({
+      targetPath: `places.${id}.footprint,entry`,
+      basis: "assumed",
+      sourceIds: [],
+      note: "Illustrative dimensions and entrance oriented toward circulation; not a surveyed building outline.",
     });
   });
   env.connections = indexedConnections.map(
@@ -425,12 +494,9 @@ export function compileEnvironment(
       fromPlaceId: `place-${connection.from + 1}`,
       toPlaceId: `place-${connection.to + 1}`,
       weight: connection.weight,
+      path: spatial.route(connection.from, connection.to),
     }),
   );
-  env.exit = {
-    x: Math.min(...env.places.map((place) => place.position.x)) - 11,
-    z: 0,
-  };
   // Ensure every scene can demonstrate a generic service, without imposing a venue category.
   if (!env.services.some((s) => s.kind === "timed")) {
     const place =
@@ -595,6 +661,13 @@ export function compileEnvironment(
     };
     return person;
   });
+  if (spatial.info.venueKind !== "generic") {
+    env.population = contextualPopulation(
+      env,
+      env.population,
+      random(seed ^ 0x7f4a7c15),
+    );
+  }
   return env;
 }
 export function fallbackConfiguration(description: string): Generated {

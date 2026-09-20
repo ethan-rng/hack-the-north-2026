@@ -135,7 +135,7 @@ export class SimulationSession extends DurableObject<Bindings> {
     };
     this.ctx.storage.sql.exec("DELETE FROM frames");
     this.save(state);
-    await this.ctx.storage.setAlarm(Date.now() + 85000);
+    await this.ctx.storage.setAlarm(Date.now() + 110000);
     this.ctx.waitUntil(this.build(description, state.setup.id));
     return this.publicState(state);
   }
@@ -310,7 +310,7 @@ export class SimulationSession extends DurableObject<Bindings> {
     const state = this.load();
     if (
       ["researching", "building"].includes(state.setup.status) &&
-      Date.now() - state.setup.startedAt >= 80000
+      Date.now() - state.setup.startedAt >= 105000
     ) {
       state.setup.status = "failed";
       state.setup.message = "Setup exceeded its time budget. Please retry.";

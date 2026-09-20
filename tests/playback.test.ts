@@ -22,7 +22,7 @@ import type { Event, ReplayFrame } from "../src/core/types";
 
 function fixture() {
   const raw = compileEnvironment(
-    fallbackConfiguration("Mall"),
+    { ...fallbackConfiguration("Mall"), venueKind: "generic" },
     "Mall",
     [],
     "unavailable",

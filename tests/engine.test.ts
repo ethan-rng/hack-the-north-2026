@@ -27,7 +27,7 @@ import type {
 
 function fixture() {
   const env = compileEnvironment(
-    fallbackConfiguration("Test park"),
+    { ...fallbackConfiguration("Test park"), venueKind: "generic" },
     "Test park",
     [],
     "unavailable",
