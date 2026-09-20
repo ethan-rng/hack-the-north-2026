@@ -1,5 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
+import { Box3, Euler, Matrix4, Vector3 } from "three";
 
 export type Vec3 = [number, number, number];
 
@@ -122,7 +123,11 @@ export const Co = (
   rotation,
 });
 
-export const Sp = (position: Vec3, radius: number, color?: string): Primitive => ({
+export const Sp = (
+  position: Vec3,
+  radius: number,
+  color?: string,
+): Primitive => ({
   kind: "sphere",
   position,
   radius,
@@ -276,3 +281,38 @@ export const palette = {
   slate: "#4d5a63",
   silver: "#d1d5d9",
 } as const;
+
+/** Bounds include rotated primitive geometry so large landmarks fit their assigned plot. */
+export function footprintBounds(primitives: Primitive[]) {
+  const bounds = new Box3();
+  for (const p of primitives) {
+    const radius =
+      p.kind === "cyl"
+        ? Math.max(p.radiusTop, p.radiusBottom)
+        : p.kind === "box"
+          ? 0
+          : p.radius + (p.kind === "torus" ? p.tube : 0);
+    const size =
+      p.kind === "box"
+        ? p.scale
+        : p.kind === "cyl" || p.kind === "cone"
+          ? [radius * 2, p.height, radius * 2]
+          : [radius * 2, radius * 2, radius * 2];
+    const box = new Box3(
+      new Vector3(-size[0] / 2, -size[1] / 2, -size[2] / 2),
+      new Vector3(size[0] / 2, size[1] / 2, size[2] / 2),
+    );
+    const rotation = "rotation" in p ? p.rotation : undefined;
+    const matrix = new Matrix4().makeRotationFromEuler(
+      new Euler(...(rotation ?? [0, 0, 0])),
+    );
+    matrix.setPosition(...p.position);
+    bounds.union(box.applyMatrix4(matrix));
+  }
+  return {
+    width: Math.max(1, bounds.max.x - bounds.min.x),
+    depth: Math.max(1, bounds.max.z - bounds.min.z),
+    x: (bounds.min.x + bounds.max.x) / 2,
+    z: (bounds.min.z + bounds.max.z) / 2,
+  };
+}

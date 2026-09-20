@@ -1,4 +1,18 @@
 export type Point = { x: number; z: number };
+export type VenueKind =
+  "airport" | "mall" | "neighborhood" | "park" | "small_venue" | "generic";
+export interface Footprint {
+  width: number;
+  depth: number;
+  rotation: number;
+}
+export interface LayoutInfo {
+  venueKind: VenueKind;
+  basis: "template" | "geographic" | "mixed";
+  metersPerUnit?: number;
+  origin?: { latitude: number; longitude: number };
+  notes: string[];
+}
 export const capabilities = [
   "visit",
   "browse",
@@ -30,6 +44,7 @@ export interface Source {
   title: string;
   retrievedAt: string;
   excerpt: string;
+  topic?: "identity" | "roster" | "layout" | "operations";
 }
 export interface Provenance {
   targetPath: string;
@@ -65,6 +80,9 @@ export interface Place {
   admissionCapacity: number;
   position: Point;
   entry: Point;
+  footprint?: Footprint;
+  zone?: string;
+  geographic?: { latitude: number; longitude: number; sourceIds: string[] };
   details?: PlaceDetails;
 }
 export interface PlaceConnection {
@@ -72,6 +90,7 @@ export interface PlaceConnection {
   fromPlaceId: string;
   toPlaceId: string;
   weight: number;
+  path?: Point[];
 }
 export interface Service {
   id: string;
@@ -99,6 +118,7 @@ export interface Environment {
   products: Product[];
   services: Service[];
   exit: Point;
+  layout?: LayoutInfo;
   population: Person[];
   presentation: Record<
     string,
@@ -149,6 +169,10 @@ export interface Person {
   id: string;
   displayName: string;
   roleLabel: string;
+  groupId?: string;
+  purpose?: string;
+  arrivalSeconds?: number;
+  departureSeconds?: number;
   interests: Record<string, number>;
   goals: Goal[];
   budgetRemainingCents: number | null;
@@ -161,7 +185,7 @@ export interface Person {
   mood: string;
   position: Point;
   placeId?: string;
-  presence: "inside" | "exited";
+  presence: "inside" | "exited" | "not_arrived";
   currentAction: Action | null;
   knownEventIds: string[];
   knownFacts: { subjectKey: string; targetId: string; learnedAt: number }[];

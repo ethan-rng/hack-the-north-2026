@@ -16,6 +16,7 @@ export function settlePopulation(env: Environment): Environment {
   const settled = structuredClone(env);
   const counts: Record<string, number> = {};
   for (const [i, p] of settled.population.entries()) {
+    if (p.presence === "not_arrived") continue;
     const preferredId = p.goals.find((g) => g.targetId)?.targetId;
     const available = settled.places.filter(
       (place) => (counts[place.id] ?? 0) < place.admissionCapacity,
@@ -41,7 +42,7 @@ export function settlePopulation(env: Environment): Environment {
         goal.status = "completed";
   }
   const note =
-    "The opening population is already distributed through the venue. Initial placement and activities are assumed; no arrival sequence or historical sales are simulated.";
+    "The opening population is already distributed through the venue. Initial placement and activities are assumed; scheduled groups arrive during simulation, and no historical sales are fabricated.";
   if (!settled.assumptions.includes(note)) settled.assumptions.push(note);
   return settled;
 }
@@ -49,6 +50,7 @@ export function newScenario(env: Environment): Run {
   const run = newRun(env, 86400);
   run.status = "paused";
   for (const [i, p] of run.people.entries()) {
+    if (p.presence === "not_arrived") continue;
     const place = env.places.find((place) => place.id === p.placeId);
     const type = place?.capabilities.includes("browse")
       ? "browse"

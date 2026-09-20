@@ -235,7 +235,10 @@ function Sources({ env }: { env: Environment }) {
             {s.title}
             <ExternalLink size={13} />
           </a>
-          <small>Retrieved {new Date(s.retrievedAt).toLocaleString()}</small>
+          <small>
+            {s.topic ? `${s.topic} · ` : ""}Retrieved{" "}
+            {new Date(s.retrievedAt).toLocaleString()}
+          </small>
           <details>
             <summary>Retrieved evidence</summary>
             <p className="excerpt">{s.excerpt}</p>
@@ -283,13 +286,28 @@ function PersonInspector({
         {p.roleLabel} / {p.id.replace("person-", "#")}
       </p>
       <h2>{p.displayName}</h2>
+      {p.purpose && <p>{p.purpose}</p>}
+      {p.groupId && (
+        <p className="muted">
+          {p.groupId.replace("group-", "Group ")} ·{" "}
+          {p.presence === "not_arrived"
+            ? `Arrives at ${p.arrivalSeconds}s`
+            : "Already arrived"}
+          {p.departureSeconds !== undefined
+            ? ` · Plans until ${p.departureSeconds}s`
+            : ""}
+        </p>
+      )}
       <div className="inline-tags">
         <span className="tag">{p.mood}</span>
       </div>
       <section>
         <h3>Right now</h3>
         <p className="current-action">
-          {p.currentAction?.label ?? "Observing the environment"}
+          {p.currentAction?.label ??
+            (p.presence === "not_arrived"
+              ? "Has not arrived yet"
+              : "Observing the environment")}
         </p>
         <p className="muted">
           {place
@@ -436,6 +454,16 @@ function PlaceInspector({
       <p className="eyebrow">{p.typeLabel}</p>
       <h2>{p.name}</h2>
       <p>{p.description}</p>
+      {p.zone && <p className="muted">{p.zone}</p>}
+      {p.footprint && (
+        <p className="muted">
+          Illustrative footprint: {p.footprint.width.toFixed(1)} ×{" "}
+          {p.footprint.depth.toFixed(1)} world units ·{" "}
+          {p.geographic
+            ? "Position supported by source coordinates"
+            : "Approximate position"}
+        </p>
+      )}
       <div className="inline-tags">
         <span className={`tag ${placeOpen(run, p.id) ? "" : "warning"}`}>
           {placeOpen(run, p.id) ? "Open" : "Closed to new arrivals"}

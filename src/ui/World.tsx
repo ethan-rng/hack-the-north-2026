@@ -15,7 +15,7 @@ import type { Environment, Person, Place, Run } from "@/core/types";
 
 const DEFAULT_ZOOM_PERCENT = 175;
 import { placeOpen, occupancy } from "@/core/engine";
-import { BuildingModel } from "@/ui/buildings/primitives";
+import { BuildingModel, footprintBounds } from "@/ui/buildings/primitives";
 import { stylesById } from "@/ui/buildings/styles";
 import { daylightBackgroundForProgress } from "@/ui/daylight";
 
@@ -179,11 +179,27 @@ function Building({
   closed: boolean;
   onSelect: () => void;
 }) {
-  const rotation = Math.atan2(
-    place.entry.x - place.position.x,
-    place.entry.z - place.position.z,
-  );
+  const rotation =
+    place.footprint?.rotation ??
+    Math.atan2(
+      place.entry.x - place.position.x,
+      place.entry.z - place.position.z,
+    );
   const style = appearance.styleId ? stylesById[appearance.styleId] : undefined;
+  const primitives = useMemo(
+    () =>
+      style?.build({ color: closed ? "#a9aaa3" : appearance.color, closed }),
+    [style, closed, appearance.color],
+  );
+  const bounds = useMemo(
+    () =>
+      primitives
+        ? footprintBounds(primitives)
+        : { width: 9, depth: 7, x: 0, z: 0 },
+    [primitives],
+  );
+  const width = place.footprint?.width ?? 9;
+  const depth = place.footprint?.depth ?? 7;
   return (
     <group
       position={[place.position.x, 0, place.position.z]}
@@ -195,173 +211,201 @@ function Building({
     >
       <Box
         position={[0, 0.12, 0]}
-        scale={[9, 0.24, 7]}
+        scale={[width, 0.24, depth]}
         color={selected ? "#203e48" : "#d7dac9"}
       />
-      {style ? (
-        <BuildingModel
-          primitives={style.build({
-            color: closed ? "#a9aaa3" : appearance.color,
-            closed,
-          })}
-          fallbackColor={closed ? "#a9aaa3" : appearance.color}
-        />
-      ) : appearance.asset === "gate" ? (
-        <>
-          <Box
-            position={[-2.5, 2.2, 0]}
-            scale={[0.55, 4.4, 0.65]}
-            color={appearance.color}
-          />
-          <Box
-            position={[2.5, 2.2, 0]}
-            scale={[0.55, 4.4, 0.65]}
-            color={appearance.color}
-          />
-          <Box
-            position={[0, 4.3, 0]}
-            scale={[5.6, 0.8, 0.8]}
-            color={appearance.color}
-          />
-          <Box position={[0, 0.6, 1]} scale={[3, 0.7, 0.5]} color="#859daa" />
-        </>
-      ) : appearance.asset === "rest" || appearance.asset === "open" ? (
-        <>
-          <Box position={[0, 0.45, 0]} scale={[4, 0.45, 1]} color="#9a8062" />
-          <Box position={[0, 0.95, -0.5]} scale={[4, 1, 0.2]} color="#9a8062" />
-          <Tree x={-2.8} z={-1.7} />
-          <Tree x={2.8} z={1.5} />
-        </>
-      ) : appearance.asset === "parking_lot" ? (
-        <>
-          <Box
-            position={[0, 0.24, 0]}
-            scale={[8.4, 0.05, 6.4]}
-            color="#3f3f3d"
-          />
-          {[-2.8, -1.4, 0, 1.4, 2.8].map((x) => (
-            <Box
-              key={`line-${x}`}
-              position={[x, 0.28, 0]}
-              scale={[0.06, 0.02, 5.6]}
-              color="#e8e4c9"
+      <group scale={[width / bounds.width, 1, depth / bounds.depth]}>
+        <group position={[-bounds.x, 0, -bounds.z]}>
+          {primitives ? (
+            <BuildingModel
+              primitives={primitives}
+              fallbackColor={closed ? "#a9aaa3" : appearance.color}
             />
-          ))}
-          {[-2.1, -0.7, 0.7, 2.1].map((x, i) =>
-            [-1.6, 1.6].map((cz, j) => (
-              <group
-                key={`car-${x}-${cz}`}
-                position={[x, 0.3, cz]}
-                rotation={[0, cz > 0 ? Math.PI : 0, 0]}
-              >
-                <Box
-                  position={[0, 0.28, 0]}
-                  scale={[1, 0.55, 2]}
-                  color={
-                    ["#c25c4c", "#5f8391", "#c9b478", "#88a37a"][(i + j) % 4]
-                  }
-                />
-                <Box
-                  position={[0, 0.62, -0.2]}
-                  scale={[0.88, 0.4, 1]}
-                  color="#2b2b28"
-                />
-              </group>
-            )),
-          )}
-        </>
-      ) : appearance.asset === "parking_garage" ? (
-        <>
-          <Box
-            position={[0, 0.4, 0]}
-            scale={[8.4, 0.2, 5.4]}
-            color={closed ? "#a9aaa3" : appearance.color}
-          />
-          <Box
-            position={[0, 1.6, 0]}
-            scale={[8.2, 0.2, 5.2]}
-            color={closed ? "#a9aaa3" : appearance.color}
-          />
-          <Box
-            position={[0, 2.8, 0]}
-            scale={[8.2, 0.2, 5.2]}
-            color={closed ? "#a9aaa3" : appearance.color}
-          />
-          <Box position={[0, 4, 0]} scale={[8.4, 0.25, 5.4]} color="#5c5c58" />
-          {[-4.1, -1.4, 1.4, 4.1].map((x) => (
-            <Box
-              key={`col-${x}`}
-              position={[x, 2.1, 0]}
-              scale={[0.4, 4.2, 5.2]}
-              color={closed ? "#a9aaa3" : appearance.color}
-            />
-          ))}
-          {[1, 2.2].map((y) =>
-            [-2.6, -1.2, 1.2, 2.6].map((x) => (
+          ) : appearance.asset === "gate" ? (
+            <>
               <Box
-                key={`slot-${x}-${y}`}
-                position={[x, y, 2.55]}
-                scale={[1, 0.6, 0.06]}
-                color="#2c2c2a"
+                position={[-2.5, 2.2, 0]}
+                scale={[0.55, 4.4, 0.65]}
+                color={appearance.color}
               />
-            )),
+              <Box
+                position={[2.5, 2.2, 0]}
+                scale={[0.55, 4.4, 0.65]}
+                color={appearance.color}
+              />
+              <Box
+                position={[0, 4.3, 0]}
+                scale={[5.6, 0.8, 0.8]}
+                color={appearance.color}
+              />
+              <Box
+                position={[0, 0.6, 1]}
+                scale={[3, 0.7, 0.5]}
+                color="#859daa"
+              />
+            </>
+          ) : appearance.asset === "rest" || appearance.asset === "open" ? (
+            <>
+              <Box
+                position={[0, 0.45, 0]}
+                scale={[4, 0.45, 1]}
+                color="#9a8062"
+              />
+              <Box
+                position={[0, 0.95, -0.5]}
+                scale={[4, 1, 0.2]}
+                color="#9a8062"
+              />
+              <Tree x={-2.8} z={-1.7} />
+              <Tree x={2.8} z={1.5} />
+            </>
+          ) : appearance.asset === "parking_lot" ? (
+            <>
+              <Box
+                position={[0, 0.24, 0]}
+                scale={[8.4, 0.05, 6.4]}
+                color="#3f3f3d"
+              />
+              {[-2.8, -1.4, 0, 1.4, 2.8].map((x) => (
+                <Box
+                  key={`line-${x}`}
+                  position={[x, 0.28, 0]}
+                  scale={[0.06, 0.02, 5.6]}
+                  color="#e8e4c9"
+                />
+              ))}
+              {[-2.1, -0.7, 0.7, 2.1].map((x, i) =>
+                [-1.6, 1.6].map((cz, j) => (
+                  <group
+                    key={`car-${x}-${cz}`}
+                    position={[x, 0.3, cz]}
+                    rotation={[0, cz > 0 ? Math.PI : 0, 0]}
+                  >
+                    <Box
+                      position={[0, 0.28, 0]}
+                      scale={[1, 0.55, 2]}
+                      color={
+                        ["#c25c4c", "#5f8391", "#c9b478", "#88a37a"][
+                          (i + j) % 4
+                        ]
+                      }
+                    />
+                    <Box
+                      position={[0, 0.62, -0.2]}
+                      scale={[0.88, 0.4, 1]}
+                      color="#2b2b28"
+                    />
+                  </group>
+                )),
+              )}
+            </>
+          ) : appearance.asset === "parking_garage" ? (
+            <>
+              <Box
+                position={[0, 0.4, 0]}
+                scale={[8.4, 0.2, 5.4]}
+                color={closed ? "#a9aaa3" : appearance.color}
+              />
+              <Box
+                position={[0, 1.6, 0]}
+                scale={[8.2, 0.2, 5.2]}
+                color={closed ? "#a9aaa3" : appearance.color}
+              />
+              <Box
+                position={[0, 2.8, 0]}
+                scale={[8.2, 0.2, 5.2]}
+                color={closed ? "#a9aaa3" : appearance.color}
+              />
+              <Box
+                position={[0, 4, 0]}
+                scale={[8.4, 0.25, 5.4]}
+                color="#5c5c58"
+              />
+              {[-4.1, -1.4, 1.4, 4.1].map((x) => (
+                <Box
+                  key={`col-${x}`}
+                  position={[x, 2.1, 0]}
+                  scale={[0.4, 4.2, 5.2]}
+                  color={closed ? "#a9aaa3" : appearance.color}
+                />
+              ))}
+              {[1, 2.2].map((y) =>
+                [-2.6, -1.2, 1.2, 2.6].map((x) => (
+                  <Box
+                    key={`slot-${x}-${y}`}
+                    position={[x, y, 2.55]}
+                    scale={[1, 0.6, 0.06]}
+                    color="#2c2c2a"
+                  />
+                )),
+              )}
+              <Box
+                position={[0, 1.2, 2.6]}
+                scale={[1.8, 1.4, 0.1]}
+                color="#385965"
+              />
+            </>
+          ) : appearance.asset === "attraction" ? (
+            <>
+              <mesh castShadow position={[0, 1.1, 0]}>
+                <cylinderGeometry args={[2.7, 3.2, 1.7, 8]} />
+                <meshStandardMaterial color={appearance.color} />
+              </mesh>
+              <mesh castShadow position={[0, 3.2, 0]}>
+                <coneGeometry args={[3.5, 1.6, 8]} />
+                <meshStandardMaterial color="#f1d9a4" />
+              </mesh>
+              <Box position={[0, 2, 0]} scale={[0.4, 4, 0.4]} color="#897967" />
+            </>
+          ) : (
+            <>
+              <Box
+                position={[0, 1.5, 0]}
+                scale={[7.5, 3, 5]}
+                color={closed ? "#a9aaa3" : appearance.color}
+              />
+              <Box
+                position={[0, 3.12, 0]}
+                scale={[8, 0.28, 5.6]}
+                color="#f1ebd9"
+              />
+              <Box
+                position={[0, 1.3, 2.54]}
+                scale={[1.3, 2.3, 0.15]}
+                color="#385965"
+              />
+              <Box
+                position={[-2.25, 1.65, 2.54]}
+                scale={[1.7, 1.35, 0.12]}
+                color="#bad4d4"
+              />
+              <Box
+                position={[2.25, 1.65, 2.54]}
+                scale={[1.7, 1.35, 0.12]}
+                color="#bad4d4"
+              />
+              <Box
+                position={[0, 2.8, 3]}
+                scale={[7.8, 0.22, 1.2]}
+                color="#fff5de"
+              />
+              {[-3, -1.5, 0, 1.5, 3].map((x) => (
+                <Box
+                  key={x}
+                  position={[x, 2.93, 3]}
+                  scale={[0.75, 0.07, 1.2]}
+                  color={appearance.color}
+                />
+              ))}
+            </>
           )}
-          <Box
-            position={[0, 1.2, 2.6]}
-            scale={[1.8, 1.4, 0.1]}
-            color="#385965"
-          />
-        </>
-      ) : appearance.asset === "attraction" ? (
-        <>
-          <mesh castShadow position={[0, 1.1, 0]}>
-            <cylinderGeometry args={[2.7, 3.2, 1.7, 8]} />
-            <meshStandardMaterial color={appearance.color} />
-          </mesh>
-          <mesh castShadow position={[0, 3.2, 0]}>
-            <coneGeometry args={[3.5, 1.6, 8]} />
-            <meshStandardMaterial color="#f1d9a4" />
-          </mesh>
-          <Box position={[0, 2, 0]} scale={[0.4, 4, 0.4]} color="#897967" />
-        </>
-      ) : (
-        <>
-          <Box
-            position={[0, 1.5, 0]}
-            scale={[7.5, 3, 5]}
-            color={closed ? "#a9aaa3" : appearance.color}
-          />
-          <Box position={[0, 3.12, 0]} scale={[8, 0.28, 5.6]} color="#f1ebd9" />
-          <Box
-            position={[0, 1.3, 2.54]}
-            scale={[1.3, 2.3, 0.15]}
-            color="#385965"
-          />
-          <Box
-            position={[-2.25, 1.65, 2.54]}
-            scale={[1.7, 1.35, 0.12]}
-            color="#bad4d4"
-          />
-          <Box
-            position={[2.25, 1.65, 2.54]}
-            scale={[1.7, 1.35, 0.12]}
-            color="#bad4d4"
-          />
-          <Box
-            position={[0, 2.8, 3]}
-            scale={[7.8, 0.22, 1.2]}
-            color="#fff5de"
-          />
-          {[-3, -1.5, 0, 1.5, 3].map((x) => (
-            <Box
-              key={x}
-              position={[x, 2.93, 3]}
-              scale={[0.75, 0.07, 1.2]}
-              color={appearance.color}
-            />
-          ))}
-        </>
-      )}
+        </group>
+      </group>
+      <Box
+        position={[0, 0.16, depth / 2 + 0.4]}
+        scale={[Math.min(1.8, width), 0.15, 0.8]}
+        color="#f7eedc"
+      />
     </group>
   );
 }
@@ -524,11 +568,27 @@ export default function World({
   const scene = useMemo(() => {
     const xs = [
       environment.exit.x,
-      ...environment.places.map((place) => place.position.x),
+      ...environment.places.flatMap((place) => [
+        place.position.x -
+          Math.max(place.footprint?.width ?? 9, place.footprint?.depth ?? 7) /
+            2,
+        place.position.x +
+          Math.max(place.footprint?.width ?? 9, place.footprint?.depth ?? 7) /
+            2,
+      ]),
+      ...environment.connections.flatMap((c) => c.path?.map((p) => p.x) ?? []),
     ];
     const zs = [
       environment.exit.z,
-      ...environment.places.map((place) => place.position.z),
+      ...environment.places.flatMap((place) => [
+        place.position.z -
+          Math.max(place.footprint?.width ?? 9, place.footprint?.depth ?? 7) /
+            2,
+        place.position.z +
+          Math.max(place.footprint?.width ?? 9, place.footprint?.depth ?? 7) /
+            2,
+      ]),
+      ...environment.connections.flatMap((c) => c.path?.map((p) => p.z) ?? []),
     ];
     const minX = Math.min(...xs) - 8;
     const maxX = Math.max(...xs) + 8;
@@ -622,14 +682,18 @@ export default function World({
             const to = environment.places.find(
               (place) => place.id === connection.toPlaceId,
             );
-            return from && to ? (
-              <Road
-                key={connection.id}
-                from={[from.entry.x, from.entry.z]}
-                to={[to.entry.x, to.entry.z]}
-                weight={connection.weight}
-              />
-            ) : null;
+            if (!from || !to) return null;
+            const path = connection.path ?? [from.entry, to.entry];
+            return path
+              .slice(1)
+              .map((point, i) => (
+                <Road
+                  key={`${connection.id}-${i}`}
+                  from={[path[i].x, path[i].z]}
+                  to={[point.x, point.z]}
+                  weight={connection.weight}
+                />
+              ));
           })}
           <Road
             from={[environment.exit.x, environment.exit.z]}
@@ -666,7 +730,9 @@ export default function World({
               z={scene.maxZ - 2}
             />,
           ])}
-          {people.map((p, i) => {
+          {people
+            .filter((p) => p.presence === "inside")
+            .map((p, i) => {
               let x = p.position.x,
                 z = p.position.z;
               if (p.placeId) {

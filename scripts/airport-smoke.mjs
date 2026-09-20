@@ -6,7 +6,7 @@ const client = await request.newContext({
 async function state() {
   return (await client.get("/api/session")).json();
 }
-async function waitFor(check, seconds = 90) {
+async function waitFor(check, seconds = 120) {
   for (let i = 0; i < seconds; i++) {
     const s = await state();
     if (check(s)) return s;

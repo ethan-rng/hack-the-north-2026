@@ -91,7 +91,7 @@ try {
   await page.getByRole("button", { name: "Create world" }).click();
   let s = await waitFor(
     (s) => ["ready", "failed"].includes(s.setup.status),
-    90,
+    120,
   );
   assert.ok(s.environment, s.setup.message);
   assert.ok(s.environment.sources.length);

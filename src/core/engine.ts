@@ -57,7 +57,13 @@ export function shortestPlacePath(
             ? connection.fromPlaceId
             : undefined;
       if (!neighbor || !unvisited.has(neighbor)) continue;
-      const candidate = best + connection.weight;
+      const length = connection.path
+        ?.slice(1)
+        .reduce(
+          (total, point, i) => total + distance(connection.path![i], point),
+          0,
+        );
+      const candidate = best + (length ?? connection.weight);
       if (candidate < (distances.get(neighbor) ?? Infinity)) {
         distances.set(neighbor, candidate);
         previous.set(neighbor, current);
@@ -72,6 +78,29 @@ export function shortestPlacePath(
     path.unshift(prior);
   }
   return path.slice(1);
+}
+/** Expand graph hops to the same corridor geometry drawn by the renderer. */
+export function movementPath(
+  env: Environment,
+  fromPlaceId: string,
+  toPlaceId: string,
+): Point[] {
+  let from = fromPlaceId;
+  return shortestPlacePath(env, fromPlaceId, toPlaceId).flatMap((to) => {
+    const connection = env.connections.find(
+      (c) =>
+        (c.fromPlaceId === from && c.toPlaceId === to) ||
+        (c.fromPlaceId === to && c.toPlaceId === from),
+    );
+    const points = connection?.path
+      ? (connection.fromPlaceId === from
+          ? connection.path
+          : [...connection.path].reverse()
+        ).slice(1)
+      : [env.places.find((p) => p.id === to)!.entry];
+    from = to;
+    return points.map((p) => ({ ...p }));
+  });
 }
 export const clamp = (n: number, min = 0, max = 1) =>
   Math.max(min, Math.min(max, n));
@@ -263,7 +292,7 @@ function socialChoices(env: Environment, run: Run, p: Person): Choice[] {
   ];
 }
 export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
-  if (p.presence === "exited") return [];
+  if (p.presence !== "inside") return [];
   if (
     env.services.some(
       (s) =>
@@ -438,6 +467,21 @@ export function createTicket(
         name: p.displayName,
         presence: p.presence,
         goals: p.goals,
+        groupId: p.groupId,
+        purpose: p.purpose,
+        arrivalSeconds: p.arrivalSeconds,
+        departureSeconds: p.departureSeconds,
+        companions: p.groupId
+          ? run.people
+              .filter(
+                (other) => other.groupId === p.groupId && other.id !== p.id,
+              )
+              .map((other) => ({
+                id: other.id,
+                placeId: other.placeId,
+                presence: other.presence,
+              }))
+          : [],
         interests: p.interests,
         budgetCents: p.budgetRemainingCents,
         priceSensitivity: p.priceSensitivity,
@@ -558,14 +602,20 @@ export function applyDecision(
   if (chosen.type === "move" || chosen.type === "flee") {
     const fromPlaceId = p.placeId;
     const target = env.places.find((x) => x.id === chosen.targetId)!.entry;
-    action.path =
-      fromPlaceId
-        ? shortestPlacePath(env, fromPlaceId, chosen.targetId!).map(
-            (placeId) => ({
-              ...env.places.find((place) => place.id === placeId)!.entry,
-            }),
-          )
-        : [{ ...target }];
+    const nearest =
+      fromPlaceId ??
+      env.places.reduce((best, place) =>
+        distance(p.position, place.entry) < distance(p.position, best.entry)
+          ? place
+          : best,
+      ).id;
+    action.path = [
+      ...(!fromPlaceId
+        ? [{ ...env.places.find((place) => place.id === nearest)!.entry }]
+        : []),
+      ...movementPath(env, nearest, chosen.targetId!),
+    ];
+    if (!action.path.length) action.path = [{ ...target }];
 
     delete p.placeId;
     p.nextDecisionAt = 1e9;
@@ -875,6 +925,13 @@ export function tick(env: Environment, run: Run, seconds = 1) {
       event.status = "completed";
   perceiveEvents(env, run);
   for (const p of run.people) {
+    if (p.presence === "not_arrived") {
+      if ((p.arrivalSeconds ?? 0) > run.time) continue;
+      p.presence = "inside";
+      p.position = { ...env.exit };
+      p.nextDecisionAt = run.time;
+      remember(p, "Arrived with the scheduled visitor group");
+    }
     if (p.presence === "exited") {
       p.presence = "inside";
       p.position = { ...env.exit };
