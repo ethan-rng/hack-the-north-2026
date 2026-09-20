@@ -137,16 +137,9 @@ try {
   await expect(
     chapters.getByRole("button", { name: /Chapter 3.*Failed/ }),
   ).toBeDisabled();
-  const latestPanelHeight = (await page
-    .locator(".event-composer")
-    .boundingBox())!.height;
   await first.click();
   await expect(slider).toHaveValue("0");
-  assert.equal(
-    (await page.locator(".event-composer").boundingBox())!.height,
-    latestPanelHeight,
-    "History message must reserve its space",
-  );
+  await expect(page.locator(".timeline-note")).toHaveCount(0);
   await expect(first).toHaveAttribute("aria-current", "step");
   await second.click();
   await expect(slider).toHaveValue("30");

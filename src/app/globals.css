@@ -1923,15 +1923,6 @@ label {
   overflow: hidden;
   overflow-wrap: anywhere;
 }
-.timeline-note {
-  font-size: 10px;
-  color: #8b7959;
-  padding: 5px 0;
-  margin-bottom: 5px;
-}
-.timeline-note button {
-  text-decoration: underline;
-}
 .processing-overlay {
   position: absolute;
   z-index: 35;
