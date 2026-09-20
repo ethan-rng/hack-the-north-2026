@@ -13,6 +13,11 @@ import type {
   Source,
 } from "../src/core/types";
 import { normalizeJevResponse } from "../services/jev-worker/src/jev-response";
+import {
+  generatedBuildingSchema,
+  reasonableBuilding,
+  type GeneratedBuilding,
+} from "../src/core/buildingSchema";
 
 export interface AIEnv {
   BASETEN_API_KEY: string;
@@ -363,6 +368,37 @@ export async function interpretEvent(
     effects: result.effects,
     approximationNotes: result.approximationNotes,
   });
+}
+// Dynamic building generation (exploratory).
+// Given a short brief, ask Baseten to emit a validated array of low-poly
+// primitives centered on ±10x, 0..12y, ±10z. Returns undefined if the LLM
+// output fails schema or bounds checks; callers should fall back to the
+// predefined /dev styles.
+export async function generateBuilding(
+  env: AIEnv,
+  brief: string,
+  palette?: string[],
+): Promise<GeneratedBuilding | undefined> {
+  const paletteHint = palette && palette.length
+    ? ` Prefer colors from this palette: ${palette.slice(0, 6).join(", ")}.`
+    : "";
+  const instructions =
+    "You are a low-poly 3D building designer. Return ONLY a primitives array describing one small stylized building. Each entry is a box, cylinder (cyl), cone, sphere, icosahedron (octa), or torus. Coordinates are in world units. Place every primitive within x=[-10,10], y=[0,12], z=[-10,10]. Ground the building at y=0 (at least one primitive must have y≤1). Aim for 8-30 primitives — enough to be recognisable, few enough to render cheaply. Use flat hex colors (#rrggbb) matching a low-poly / stylized-diorama aesthetic. Rotation values are radians. Prefer clear silhouettes over surface detail. Return valid JSON only." +
+    paletteHint;
+  try {
+    const result = await structured(
+      env,
+      "building",
+      generatedBuildingSchema,
+      instructions,
+      { brief },
+      15000,
+    );
+    if (!reasonableBuilding(result.value)) return undefined;
+    return result.value;
+  } catch {
+    return undefined;
+  }
 }
 export async function decide(
   env: AIEnv,

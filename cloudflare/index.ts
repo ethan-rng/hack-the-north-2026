@@ -20,7 +20,13 @@ import type {
   Run,
   SessionSnapshot,
 } from "../src/core/types";
-import { decide, interpretEvent, researchEnvironment, type AIEnv } from "./ai";
+import {
+  decide,
+  generateBuilding,
+  interpretEvent,
+  researchEnvironment,
+  type AIEnv,
+} from "./ai";
 
 interface Bindings extends AIEnv {
   SESSIONS: DurableObjectNamespace<SimulationSession>;
@@ -426,6 +432,21 @@ export default {
           decisions: "Cloudflare Workers AI / typesafe/jev",
           configured: !!env.BASETEN_API_KEY,
         });
+      // Exploratory: generate one low-poly building from a short brief. Not
+      // rate-limited or cached yet; only wired for the /dev/custom scratch page.
+      if (url.pathname === "/api/dev/building" && request.method === "POST") {
+        const { brief, palette } = z
+          .object({
+            brief: z.string().trim().min(4).max(300),
+            palette: z.array(z.string().max(9)).max(6).optional(),
+          })
+          .parse(await body(request));
+        const result = await generateBuilding(env, brief, palette);
+        return json(
+          result ?? { error: "Building generation failed validation" },
+          result ? 200 : 502,
+        );
+      }
       let session = request.headers
         .get("Cookie")
         ?.match(/(?:^|;\s*)cc_session=([a-f0-9]{64})(?:;|$)/)?.[1];
