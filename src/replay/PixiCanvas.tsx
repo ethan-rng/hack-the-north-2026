@@ -12,6 +12,7 @@ import {
   type PlaceLayout,
   type AgentSnapshot,
 } from "./mapLayout";
+import { daylightBackgroundAt } from "./dayNight";
 import type { Event, SimSpec } from "@/sim/schema";
 
 interface Props {
@@ -28,6 +29,7 @@ export function PixiCanvas({ spec, events, currentTick, selectedAgentId, onAgent
   const layerRefs = useRef<{ bg: Container; places: Container; agents: Container } | null>(null);
   const layout = useRef<PlaceLayout[]>([]);
   const traj = useRef(buildTrajectories(events));
+  const daylight = daylightBackgroundAt(spec, currentTick);
 
   useEffect(() => {
     traj.current = buildTrajectories(events);
@@ -45,7 +47,7 @@ export function PixiCanvas({ spec, events, currentTick, selectedAgentId, onAgent
       await app.init({
         width: CANVAS_W,
         height: CANVAS_H,
-        background: 0xf8f6f2,
+        backgroundAlpha: 0,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
@@ -97,7 +99,14 @@ export function PixiCanvas({ spec, events, currentTick, selectedAgentId, onAgent
     <div
       ref={hostRef}
       className="rounded-[10px] border border-[var(--color-app-border)] overflow-hidden"
-      style={{ width: CANVAS_W, height: CANVAS_H, boxShadow: "var(--shadow-flat)" }}
+      style={{
+        width: CANVAS_W,
+        height: CANVAS_H,
+        boxShadow: "var(--shadow-flat)",
+        backgroundColor: daylight.bottom,
+        backgroundImage: `linear-gradient(180deg, ${daylight.top}, ${daylight.bottom})`,
+        transition: "background-color 400ms linear, background-image 400ms linear",
+      }}
     />
   );
 }
