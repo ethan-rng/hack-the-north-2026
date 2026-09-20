@@ -502,67 +502,6 @@ label {
   letter-spacing: -0.6px;
   line-height: 1;
 }
-.terminal-ticker {
-  position: absolute;
-  left: 240px;
-  right: 352px;
-  bottom: 205px;
-  background: #12191a;
-  color: #d6e6d3;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  border-radius: 6px;
-  border: 1px solid #22302c;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  z-index: 24;
-  overflow: hidden;
-  transition: max-height 0.15s ease;
-  max-height: 26px;
-}
-.terminal-ticker.collapsed .ticker-list {
-  display: none;
-}
-.ticker-toggle {
-  flex: 0 0 auto;
-  color: #96b39a;
-  font-size: 9px;
-  letter-spacing: 1px;
-  padding: 3px 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.ticker-toggle:hover {
-  color: #f7e6a5;
-}
-.ticker-toggle .tiny-dot {
-  background: #f7e6a5;
-}
-.ticker-list {
-  display: flex;
-  gap: 16px;
-  overflow: hidden;
-  white-space: nowrap;
-  flex: 1;
-}
-.ticker-item {
-  color: #d6e6d3;
-}
-.ticker-item.warn {
-  color: #f0a97a;
-}
-.ticker-item.event {
-  color: #a5d3e0;
-}
-.ticker-item b {
-  color: #96b39a;
-  margin-right: 4px;
-  font-weight: 500;
-}
 .grid-modal {
   position: fixed;
   inset: 0;

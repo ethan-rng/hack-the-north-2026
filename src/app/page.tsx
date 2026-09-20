@@ -804,9 +804,6 @@ export default function Page() {
   const [heatMode, setHeatMode] = useState<HeatMode>("off");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState<null | "places" | "people">(null);
-  const [eventLog, setEventLog] = useState<
-    { at: number; text: string; kind: string }[]
-  >([]);
   const [history, setHistory] = useState<{
     people: number[];
     purchases: number[];
@@ -815,7 +812,6 @@ export default function Page() {
   }>({ people: [], purchases: [], revenue: [], services: [] });
   const [paletteQuery, setPaletteQuery] = useState("");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [tickerCollapsed, setTickerCollapsed] = useState(false);
   useEffect(() => {
     setPreview(
       settlePopulation(
@@ -966,26 +962,6 @@ export default function Page() {
       };
     });
   }, [run?.runId, run?.time, totals?.purchases, totals?.revenue]);
-  useEffect(() => {
-    if (!run) return;
-    const notable: { at: number; text: string; kind: string }[] = [];
-    for (const p of run.people) {
-      if (p.lastDecision)
-        notable.push({
-          at: p.lastDecision.at,
-          text: `${p.displayName}: ${p.lastDecision.choice}`,
-          kind: "decision",
-        });
-    }
-    for (const e of run.events)
-      notable.push({
-        at: e.startTimeSeconds,
-        text: `${e.title} · ${e.status}`,
-        kind: e.status === "failed" ? "warn" : "event",
-      });
-    notable.sort((a, b) => b.at - a.at);
-    setEventLog(notable.slice(0, 40));
-  }, [run?.runId, run?.time, run?.events.length]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -1744,11 +1720,6 @@ export default function Page() {
       )}
       {run && !setupView && (
         <>
-          <TerminalTicker
-            log={eventLog}
-            collapsed={tickerCollapsed}
-            onToggle={() => setTickerCollapsed((v) => !v)}
-          />
           {gridOpen === "places" && env && (
             <PlacesGrid
               env={env}
@@ -1789,38 +1760,6 @@ export default function Page() {
         <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />
       )}
     </main>
-  );
-}
-function TerminalTicker({
-  log,
-  collapsed,
-  onToggle,
-}: {
-  log: { at: number; text: string; kind: string }[];
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className={`terminal-ticker ${collapsed ? "collapsed" : ""}`}>
-      <button
-        className="ticker-toggle"
-        onClick={onToggle}
-        aria-label="Toggle ticker"
-      >
-        <span className="tiny-dot" />
-        TICKER · {log.length}
-      </button>
-      {!collapsed && (
-        <div className="ticker-list">
-          {log.length === 0 && <em>No activity yet.</em>}
-          {log.map((entry, i) => (
-            <span key={i} className={`ticker-item ${entry.kind}`}>
-              <b>{time(entry.at)}</b> {entry.text}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 function PlacesGrid({
