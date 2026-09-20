@@ -202,16 +202,68 @@ function endAction(p: Person, run: Run) {
   p.currentAction = null;
   reconsider(p, run);
 }
-export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
-  if (p.presence === "exited")
+function socialPlaceFor(env: Environment, run: Run, p: Person) {
+  const places = env.places.filter((place) => placeOpen(run, place.id));
+  if (!places.length) return undefined;
+  const totalCapacity = places.reduce(
+    (sum, place) => sum + place.admissionCapacity,
+    0,
+  );
+  const ordinal = Math.max(0, Number(p.id.match(/\d+$/)?.[0] ?? 1) - 1);
+  let slot = ordinal % Math.max(1, totalCapacity);
+  for (const place of places) {
+    if (slot < place.admissionCapacity) return place;
+    slot -= place.admissionCapacity;
+  }
+  return places[ordinal % places.length];
+}
+function socialChoices(env: Environment, run: Run, p: Person): Choice[] {
+  const place = socialPlaceFor(env, run, p);
+  if (!place)
     return [
-      { id: "wait", type: "wait", label: "Stay outside for now" },
       {
-        id: "reenter",
-        type: "reenter",
-        label: "Re-enter through the entrance and walk into the venue",
+        id: "socialize",
+        type: "socialize",
+        label: "Chat with nearby peers",
+      },
+      {
+        id: "people-watch",
+        type: "socialize",
+        label: "Hang out and chit-chat with the group",
       },
     ];
+  if (p.placeId === place.id)
+    return [
+      {
+        id: "socialize",
+        type: "socialize",
+        targetId: place.id,
+        label: `Chatting with peers at ${place.name}`,
+      },
+      {
+        id: "people-watch",
+        type: "socialize",
+        targetId: place.id,
+        label: `Chit-chatting with the group at ${place.name}`,
+      },
+    ];
+  return [
+    {
+      id: `join-peers:${place.id}`,
+      type: "move",
+      targetId: place.id,
+      label: `Join friends who are relaxing at ${place.name}`,
+    },
+    {
+      id: `meet-group:${place.id}`,
+      type: "move",
+      targetId: place.id,
+      label: `Meet up with the group at ${place.name}`,
+    },
+  ];
+}
+export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
+  if (p.presence === "exited") return [];
   if (
     env.services.some(
       (s) =>
@@ -220,26 +272,54 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
     )
   )
     return [];
-  const choices: Choice[] = [
-    { id: "wait", type: "wait", label: "Wait here briefly and observe" },
-    {
-      id: "leave",
-      type: "leave",
-      label: "Walk to the exit and leave the environment",
-    },
-  ];
   const threatened = run.events.some(
     (e) =>
       e.status === "active" &&
       p.knownEventIds.includes(e.id) &&
       e.effects.some((f) => f.kind === "threat"),
   );
-  if (threatened)
+  if (!threatened && p.goals.every((goal) => goal.status === "completed"))
+    return socialChoices(env, run, p);
+  const choices: Choice[] = [
+    { id: "wait", type: "wait", label: "Wait here briefly and observe" },
+  ];
+  if (threatened) {
+    const threatenedPlaceIds = new Set(
+      run.events
+        .filter(
+          (event) =>
+            event.status === "active" &&
+            p.knownEventIds.includes(event.id) &&
+            event.effects.some((effect) => effect.kind === "threat"),
+        )
+        .flatMap((event) =>
+          event.effects
+            .filter((effect) => effect.kind === "threat" && effect.targetId)
+            .map((effect) => effect.targetId!),
+        ),
+    );
+    const safePlace = env.places
+      .filter(
+        (place) =>
+          placeOpen(run, place.id) &&
+          place.id !== p.placeId &&
+          !threatenedPlaceIds.has(place.id) &&
+          occupancy(run, place.id) < place.admissionCapacity,
+      )
+      .sort(
+        (a, b) =>
+          occupancy(run, a.id) / a.admissionCapacity -
+            occupancy(run, b.id) / b.admissionCapacity ||
+          a.id.localeCompare(b.id),
+      )[0];
+    if (safePlace)
     choices.push({
-      id: "flee",
+      id: `flee:${safePlace.id}`,
       type: "flee",
-      label: "Move quickly to the exit to escape a perceived threat",
+      targetId: safePlace.id,
+      label: `Move quickly to safety at ${safePlace.name}`,
     });
+  }
   if (p.foodHeld > 0)
     choices.push({
       id: "eat",
@@ -363,7 +443,6 @@ export function createTicket(
         priceSensitivity: p.priceSensitivity,
         crowdTolerance: p.crowdTolerance,
         patienceSeconds: p.maxQueueWaitSeconds,
-        departureTime: p.departureTimeSeconds,
         hunger: p.hunger,
         fatigue: p.fatigue,
         stress: p.stress,
@@ -476,21 +555,11 @@ export function applyDecision(
     status: "active",
   };
   p.currentAction = action;
-  if (["move", "leave", "flee", "reenter"].includes(chosen.type)) {
+  if (chosen.type === "move" || chosen.type === "flee") {
     const fromPlaceId = p.placeId;
-    if (chosen.type === "reenter") {
-      p.presence = "inside";
-      p.position = { ...env.exit };
-      remember(p, "Re-entered the environment");
-    }
-    const target =
-      chosen.type === "move"
-        ? env.places.find((x) => x.id === chosen.targetId)!.entry
-        : chosen.type === "reenter"
-          ? { x: 0, z: 0 }
-          : env.exit;
+    const target = env.places.find((x) => x.id === chosen.targetId)!.entry;
     action.path =
-      chosen.type === "move" && fromPlaceId
+      fromPlaceId
         ? shortestPlacePath(env, fromPlaceId, chosen.targetId!).map(
             (placeId) => ({
               ...env.places.find((place) => place.id === placeId)!.entry,
@@ -512,7 +581,12 @@ export function applyDecision(
   } else {
     action.endsAt =
       run.time +
-      ({ browse: 6, eat: 8, rest: 10, wait: 5 }[chosen.type as "browse"] ?? 5);
+      ((
+        { browse: 6, eat: 8, rest: 10, socialize: 12, wait: 5 } as Record<
+          string,
+          number
+        >
+      )[chosen.type] ?? 5);
     p.nextDecisionAt = 1e9;
   }
   run.revision++;
@@ -802,12 +876,11 @@ export function tick(env: Environment, run: Run, seconds = 1) {
   perceiveEvents(env, run);
   for (const p of run.people) {
     if (p.presence === "exited") {
-      if (
-        p.currentAction?.endsAt !== undefined &&
-        p.currentAction.endsAt <= run.time
-      )
-        endAction(p, run);
-      continue;
+      p.presence = "inside";
+      p.position = { ...env.exit };
+      p.currentAction = null;
+      p.nextDecisionAt = run.time;
+      remember(p, "Returned inside when exits were closed");
     }
     p.hunger = clamp(p.hunger + dt * 0.0008);
     p.fatigue = clamp(p.fatigue + dt * 0.0006);
@@ -849,27 +922,28 @@ export function tick(env: Environment, run: Run, seconds = 1) {
         }
       }
       if (!a.path.length) {
-        if (a.type === "leave" || a.type === "flee") {
-          p.presence = "exited";
-          completeGoal(p, run, "exit");
-          remember(p, "Exited the environment");
-        } else if (a.type === "reenter") {
-          remember(p, "Returned to the venue");
-        } else {
-          const place = env.places.find((x) => x.id === a.targetId)!;
-          if (
-            placeOpen(run, place.id) &&
-            occupancy(run, place.id) < place.admissionCapacity
-          ) {
-            p.placeId = place.id;
-            run.metrics[place.id].visits++;
-            completeGoal(p, run, "visit", place.id);
-            completeGoal(p, run, "reach", place.id);
-            remember(p, `Entered ${place.name}`);
-          } else remember(p, `Could not enter ${place.name}: closed or full`);
+        const place = env.places.find((x) => x.id === a.targetId);
+        if (!place) {
+          remember(p, "Stayed inside the environment");
+          endAction(p, run);
+          continue;
         }
+        if (
+          placeOpen(run, place.id) &&
+          occupancy(run, place.id) < place.admissionCapacity
+        ) {
+          p.placeId = place.id;
+          run.metrics[place.id].visits++;
+          completeGoal(p, run, "visit", place.id);
+          completeGoal(p, run, "reach", place.id);
+          remember(
+            p,
+            a.type === "flee"
+              ? `Reached safety at ${place.name}`
+              : `Entered ${place.name}`,
+          );
+        } else remember(p, `Could not enter ${place.name}: closed or full`);
         endAction(p, run);
-        if (p.presence === "exited") p.nextDecisionAt = run.time + 5;
       }
     } else if (a.endsAt !== undefined && a.endsAt <= run.time) {
       if (a.type === "eat" && p.foodHeld > 0) {

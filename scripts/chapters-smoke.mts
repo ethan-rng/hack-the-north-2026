@@ -59,9 +59,10 @@ for (const text of [
   activateEvent(env, run, event);
   const frames = [captureFrame(run)];
   const ticket = createTicket(env, run, person)!;
-  assert.ok(
-    applyDecision(env, run, ticket, segments.length ? "reenter" : "leave"),
-  );
+  const choice =
+    ticket.choices.find((candidate) => candidate.type === "wait") ??
+    ticket.choices[0];
+  assert.ok(applyDecision(env, run, ticket, choice.id));
   for (let i = 0; i < 30; i++) {
     tick(env, run);
     frames.push(captureFrame(run));

@@ -136,7 +136,7 @@ describe("event-driven recorded simulation", () => {
     segment.callLimit = 3;
     const tickets = advanceSegment(env, working, segment, () => {});
     expect(tickets).toHaveLength(3);
-    for (const ticket of tickets) applyDecision(env, working, ticket, "leave");
+    for (const ticket of tickets) applyDecision(env, working, ticket, "wait");
     expect(advanceSegment(env, working, segment, () => {})).toEqual([]);
     expect(segment.callsMade).toBe(3);
     expect(working.time).toBe(30);
@@ -168,7 +168,9 @@ describe("event-driven recorded simulation", () => {
     expect(segment.status).toBe("ready");
     expect(segment.callsMade).toBe(4);
     expect(working.jevFailed).toBe(4);
-    expect(applyDecision(env, working, tickets[0], "leave")).toBe(false);
+    expect(
+      applyDecision(env, working, tickets[0], "invalid-choice"),
+    ).toBe(false);
   });
   it("bounds wall time even when models are unavailable", () => {
     const { env, working, segment } = fixture();
@@ -201,31 +203,6 @@ describe("event-driven recorded simulation", () => {
     expect(sampleRecording([a, b], 1)?.products[0].stockUnits).toBe(0);
     expect(sampleRecording([a, b], 0)).toEqual(a);
     expect(a.products[0].stockUnits).toBeGreaterThan(0);
-  });
-  it("replays leave and re-entry boundaries without changing history or making calls", () => {
-    const { env, working } = fixture();
-    const p = working.people[0];
-    p.presence = "exited";
-    p.placeId = undefined;
-    p.position = { ...env.exit };
-    p.currentAction = null;
-    const outside = captureFrame(working);
-    tick(env, working);
-    const ticket = createTicket(env, working, p)!;
-    expect(applyDecision(env, working, ticket, "reenter")).toBe(true);
-    const returned = captureFrame(working);
-    const calls = working.jevAccepted;
-    expect(sampleRecording([outside, returned], 0.9)?.people[0].presence).toBe(
-      "exited",
-    );
-    expect(sampleRecording([outside, returned], 1)?.people[0].presence).toBe(
-      "inside",
-    );
-    expect(sampleRecording([outside, returned], 0)?.people[0].presence).toBe(
-      "exited",
-    );
-    expect(working.jevAccepted).toBe(calls);
-    expect(createTicket(env, { ...working, status: "paused" }, p)).toBeNull();
   });
   it("joins consecutive recordings into one timeline with the new event at the boundary", () => {
     const { base } = fixture();

@@ -282,15 +282,12 @@ function PersonInspector({
       </p>
       <h2>{p.displayName}</h2>
       <div className="inline-tags">
-        <span className="tag">{p.presence}</span>
         <span className="tag">{p.mood}</span>
       </div>
       <section>
         <h3>Right now</h3>
         <p className="current-action">
-          {p.presence === "exited"
-            ? "Outside — can choose to re-enter"
-            : (p.currentAction?.label ?? "Observing the environment")}
+          {p.currentAction?.label ?? "Observing the environment"}
         </p>
         <p className="muted">
           {place
@@ -794,11 +791,11 @@ export default function Page() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState<null | "places" | "people">(null);
   const [history, setHistory] = useState<{
-    people: number[];
+    queued: number[];
     purchases: number[];
     revenue: number[];
     services: number[];
-  }>({ people: [], purchases: [], revenue: [], services: [] });
+  }>({ queued: [], purchases: [], revenue: [], services: [] });
   const [paletteQuery, setPaletteQuery] = useState("");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   useEffect(() => {
@@ -932,7 +929,10 @@ export default function Page() {
   const totals = run ? resultFor(run, "Live").totals : null;
   useEffect(() => {
     if (!run || !totals) return;
-    const people = run.people.filter((p) => p.presence === "inside").length;
+    const queued = Object.values(run.services).reduce(
+      (sum, service) => sum + service.queue.length,
+      0,
+    );
     setHistory((h) => {
       const push = (a: number[], v: number) => {
         const next = a.length > 60 ? a.slice(-60) : a.slice();
@@ -940,7 +940,7 @@ export default function Page() {
         return next;
       };
       return {
-        people: push(h.people, people),
+        queued: push(h.queued, queued),
         purchases: push(h.purchases, totals.purchases),
         revenue: push(h.revenue, totals.revenue),
         services: push(h.services, totals.serviceCompletions),
@@ -1371,11 +1371,14 @@ export default function Page() {
                 )}
                 <div className="world-metrics z-100">
                   <div className="metric with-spark">
-                    <span>People inside</span>
+                    <span>People queued</span>
                     <strong>
-                      {run.people.filter((p) => p.presence === "inside").length}
+                      {Object.values(run.services).reduce(
+                        (sum, service) => sum + service.queue.length,
+                        0,
+                      )}
                     </strong>
-                    <Sparkline points={history.people} color="#4b6b3a" />
+                    <Sparkline points={history.queued} color="#4b6b3a" />
                   </div>
                   <div className="metric with-spark">
                     <span>Purchases</span>
@@ -1537,10 +1540,8 @@ export default function Page() {
                           <span>
                             {p.displayName}
                             <small>
-                              {p.presence === "exited"
-                                ? "Exited"
-                                : (p.currentAction?.type.replaceAll("_", " ") ??
-                                  "Observing")}
+                              {p.currentAction?.type.replaceAll("_", " ") ??
+                                "Observing"}
                             </small>
                           </span>
                         </button>

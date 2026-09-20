@@ -1313,6 +1313,11 @@ label {
   background: #e7f2df;
   color: #426c3e;
 }
+.person-state-icon.social {
+  border-color: #8eb7c6;
+  background: #e5f3f6;
+  color: #356b7a;
+}
 .person-state-icon.need {
   border-color: #d8aa6d;
   background: #fff0cf;
@@ -1327,11 +1332,6 @@ label {
   border-color: #d58e75;
   background: #ffe2d8;
   color: #a8462f;
-}
-.exit-label {
-  font-size: 9px;
-  color: #73816a;
-  white-space: nowrap;
 }
 .closed-dot {
   width: 5px;

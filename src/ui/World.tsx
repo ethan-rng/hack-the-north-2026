@@ -5,6 +5,7 @@ import { Component, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   BatteryLow,
   Frown,
+  MessageCircle,
   Smile,
   TriangleAlert,
   Utensils,
@@ -367,10 +368,12 @@ function Walker({
   selected: boolean;
   onSelect: () => void;
 }) {
-  // Show one dominant internal state. Immediate needs outrank positive moods;
-  // ordinary actions such as walking, waiting, resting and leaving stay unbadged.
+  // Show one dominant state. Chatting is an explicit visible activity; other
+  // ordinary actions such as walking, waiting and resting stay unbadged.
   const state: { Icon: LucideIcon; label: string; tone: string } | null =
-    person.mood === "frightened" || person.stress >= 0.75
+    person.currentAction?.type === "socialize"
+      ? { Icon: MessageCircle, label: "Chatting with peers", tone: "social" }
+      : person.mood === "frightened" || person.stress >= 0.75
       ? { Icon: TriangleAlert, label: "Afraid", tone: "danger" }
       : person.hunger >= 0.55
         ? { Icon: Utensils, label: "Hungry", tone: "need" }
@@ -645,12 +648,7 @@ export default function World({
               z={scene.maxZ - 2}
             />,
           ])}
-          <Html position={[environment.exit.x, 0.3, environment.exit.z]} center>
-            <span className="exit-label">EXIT ↙</span>
-          </Html>
-          {people
-            .filter((p) => p.presence === "inside")
-            .map((p, i) => {
+          {people.map((p, i) => {
               let x = p.position.x,
                 z = p.position.z;
               if (p.placeId) {

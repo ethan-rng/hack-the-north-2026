@@ -544,14 +544,6 @@ export function compileEnvironment(
         ...candidates.slice(0, Math.max(0, taskCount - journeyGoals.length)),
       ];
     }
-    goals.push({
-      id: `g-${i}-exit`,
-      kind: "exit",
-      description:
-        "Leave after goals are satisfied or departure time approaches",
-      priority: 0.2,
-      status: "pending",
-    });
     const person: Person = {
       id: `person-${i + 1}`,
       displayName: name,
@@ -564,7 +556,6 @@ export function compileEnvironment(
       priceSensitivity: rng(),
       crowdTolerance: rng(),
       maxQueueWaitSeconds: 12 + Math.round(rng() * 40),
-      departureTimeSeconds: 120 + Math.round(rng() * 60),
       hunger: 0.1 + rng() * 0.6,
       fatigue: rng() * 0.35,
       stress: 0,

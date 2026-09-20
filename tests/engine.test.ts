@@ -163,7 +163,10 @@ describe("authoritative simulation mechanics", () => {
     action(env, run, p, `buy:${product.id}`);
     tick(env, run);
     addEvent(env, run, [effect("threat", product.placeId, 1)]);
-    action(env, run, p, "flee");
+    const flee = choicesFor(env, run, p).find(
+      (choice) => choice.type === "flee",
+    )!;
+    action(env, run, p, flee.id);
     expect(run.services[service.id].active).toHaveLength(0);
     expect(run.metrics[product.placeId].interrupted).toBe(1);
     expect(run.metrics[product.placeId].abandonment).toBe(0);
@@ -227,8 +230,6 @@ describe("perception, inference and baseline boundaries", () => {
     "delivers a distant %s event to everyone and includes it in Jev context",
     (kind) => {
       const { env, run } = fixture();
-      const exited = run.people.at(-1)!;
-      exited.presence = "exited";
       const event = addEvent(
         env,
         run,
@@ -241,16 +242,11 @@ describe("perception, inference and baseline boundaries", () => {
         expect(ticket.context).toMatchObject({
           perceivedEvents: [expect.objectContaining({ title: event.title })],
         });
-        if (kind === "threat" && p.presence === "inside")
-          expect(ticket.choices.some((choice) => choice.id === "flee")).toBe(
-            true,
-          );
+        if (kind === "threat")
+          expect(
+            ticket.choices.some((choice) => choice.type === "flee"),
+          ).toBe(true);
       }
-      expect(exited.knownEventIds).toContain(event.id);
-      expect(exited.pending?.choices.map((c) => c.id)).toEqual([
-        "wait",
-        "reenter",
-      ]);
       tick(env, run);
       expect(
         run.people[0].knownEventIds.filter((id) => id === event.id),
@@ -269,9 +265,9 @@ describe("perception, inference and baseline boundaries", () => {
     });
     tick(env, run);
     expect(p.knownEventIds).toContain(event.id);
-    expect(choicesFor(env, run, p).some((choice) => choice.id === "flee")).toBe(
-      true,
-    );
+    expect(
+      choicesFor(env, run, p).some((choice) => choice.type === "flee"),
+    ).toBe(true);
   });
   it("broadcasts gate changes globally while updating only matching passenger goals", () => {
     const { env, run } = fixture();
@@ -309,7 +305,7 @@ describe("perception, inference and baseline boundaries", () => {
     p.nextDecisionAt = 0;
     const before = createTicket(env, run, p)!;
     addEvent(env, run, [effect("threat", null, 1)]);
-    expect(applyDecision(env, run, before, "leave")).toBe(false);
+    expect(applyDecision(env, run, before, "invalid-choice")).toBe(false);
     const pending = createTicket(env, run, p)!;
     const actionId = p.currentAction!.actionId;
     expect(applyDecision(env, run, pending)).toBe(false);
@@ -343,86 +339,56 @@ describe("perception, inference and baseline boundaries", () => {
     expect(reset.runId).not.toBe(run.runId);
     expect(reset.people).toEqual(env.population);
     expect(reset.products).toEqual(env.products);
-    expect(applyDecision(env, reset, ticket, "leave")).toBe(false);
+    expect(applyDecision(env, reset, ticket, "invalid-choice")).toBe(false);
     expect(reset.time).toBe(0);
   });
-  it.each(["leave", "flee"])(
-    "allows re-entry only after %s completes and preserves personal history",
-    (exitAction) => {
-      const { env, run } = fixture(),
-        p = run.people[0];
-      if (exitAction === "flee")
-        addEvent(env, run, [effect("threat", null, 1)]);
-      p.position = { x: 0, z: 0 };
-      p.budgetRemainingCents = 1234;
-      p.purchaseIds = ["prior-purchase"];
-      p.goals[0].status = "completed";
-      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
-      action(env, run, p, exitAction);
-      tick(env, run);
-      expect(p.presence).toBe("inside");
-      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
-      advance(env, run, 20);
-      expect(p.presence).toBe("exited");
-      expect(choicesFor(env, run, p).map((c) => c.id)).toEqual([
-        "wait",
-        "reenter",
-      ]);
-      action(env, run, p, "reenter");
-      expect(p.presence).toBe("inside");
-      expect(p.position).toEqual(env.exit);
-      expect(p.currentAction?.type).toBe("reenter");
-      expect(p.placeId).toBeUndefined();
-      expect(choicesFor(env, run, p).map((c) => c.id)).not.toContain("reenter");
-      advance(env, run, 15);
-      expect(p.position).toEqual({ x: 0, z: 0 });
-      expect(p.currentAction).toBeNull();
-      expect(p.budgetRemainingCents).toBe(1234);
-      expect(p.purchaseIds).toEqual(["prior-purchase"]);
-      expect(p.goals[0].status).toBe("completed");
-      expect(Object.values(run.metrics).reduce((n, m) => n + m.visits, 0)).toBe(
-        0,
-      );
-      action(env, run, p, "leave");
-      advance(env, run, 15);
-      expect(p.presence).toBe("exited");
-      expect(choicesFor(env, run, p).map((c) => c.id)).toContain("reenter");
-    },
-  );
-  it("lets outside waits finish and new global events prompt a return decision", () => {
+  it("moves threatened people to another place without removing them", () => {
     const { env, run } = fixture(),
       p = run.people[0];
-    action(env, run, p, "leave");
-    advance(env, run, 30);
-    action(env, run, p, "wait");
-    expect(createTicket(env, run, p)).toBeNull();
-    advance(env, run, 5);
-    const ticket = createTicket(env, run, p)!;
-    expect(ticket.context).toMatchObject({ person: { presence: "exited" } });
-    expect(applyDecision(env, run, ticket, "wait")).toBe(true);
-    const event = addEvent(env, run, [effect("attraction", null, 1)]);
-    expect(p.knownEventIds).toContain(event.id);
-    const returnTicket = createTicket(env, run, p)!;
-    expect(returnTicket.context).toMatchObject({
-      perceivedEvents: [expect.objectContaining({ title: event.title })],
-    });
-    expect(applyDecision(env, run, returnTicket, "reenter")).toBe(true);
+    p.placeId = env.places[0].id;
+    p.position = { ...env.places[0].entry };
+    addEvent(env, run, [effect("threat", env.places[0].id, 1)]);
+    const flee = choicesFor(env, run, p).find(
+      (choice) => choice.type === "flee",
+    )!;
+    action(env, run, p, flee.id);
+    advance(env, run, 60);
+    expect(p.presence).toBe("inside");
+    expect(p.placeId).toBe(flee.targetId);
+    expect(p.recentExperiences.at(-1)).toContain("Reached safety");
   });
-  it("rejects a re-entry choice if the person is already inside", () => {
+  it("groups people with completed goals and keeps them socializing", () => {
+    const { env, run } = fixture();
+    const peers = run.people.slice(0, 2);
+    for (const person of peers)
+      for (const goal of person.goals) goal.status = "completed";
+    const destinations = peers.map((person) => {
+      const choice = choicesFor(env, run, person)[0];
+      expect(choice.type).toBe("move");
+      action(env, run, person, choice.id);
+      return choice.targetId;
+    });
+    expect(new Set(destinations).size).toBe(1);
+    advance(env, run, 60);
+    expect(peers.every((person) => person.presence === "inside")).toBe(true);
+    expect(new Set(peers.map((person) => person.placeId)).size).toBe(1);
+    for (const person of peers)
+      expect(
+        choicesFor(env, run, person).every(
+          (choice) => choice.type === "socialize",
+        ),
+      ).toBe(true);
+    const chat = choicesFor(env, run, peers[0])[0];
+    action(env, run, peers[0], chat.id);
+    expect(peers[0].currentAction?.type).toBe("socialize");
+    expect(peers[0].currentAction?.label).toContain("Chat");
+  });
+  it("returns legacy exited people inside and computes equal-duration comparisons", () => {
     const { env, run } = fixture(),
       p = run.people[0];
     p.presence = "exited";
-    const ticket = createTicket(env, run, p)!;
-    p.presence = "inside";
-    expect(applyDecision(env, run, ticket, "reenter")).toBe(false);
-    expect(run.jevAccepted).toBe(0);
-  });
-  it("retains exited person records and computes equal-duration comparisons", () => {
-    const { env, run } = fixture(),
-      p = run.people[0];
-    action(env, run, p, "leave");
-    advance(env, run, 30);
-    expect(p.presence).toBe("exited");
+    tick(env, run);
+    expect(p.presence).toBe("inside");
     expect(run.people).toHaveLength(40);
     const a = resultFor(run, "A"),
       b = resultFor(newRun(env), "B");
@@ -501,9 +467,7 @@ describe("perception, inference and baseline boundaries", () => {
   });
   it("assigns each person two to five seeded tasks", () => {
     const { env } = fixture();
-    const taskCounts = env.population.map(
-      (person) => person.goals.filter((goal) => goal.kind !== "exit").length,
-    );
+    const taskCounts = env.population.map((person) => person.goals.length);
     expect(taskCounts.every((count) => count >= 2 && count <= 5)).toBe(true);
     expect(new Set(taskCounts).size).toBeGreaterThan(1);
   });

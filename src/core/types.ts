@@ -12,7 +12,7 @@ export const capabilities = [
 ] as const;
 export type Capability = (typeof capabilities)[number];
 export type GoalKind =
-  "buy" | "eat" | "visit" | "receive_service" | "reach" | "wait_until" | "exit";
+  "buy" | "eat" | "visit" | "receive_service" | "reach" | "wait_until";
 export interface Goal {
   id: string;
   kind: GoalKind;
@@ -110,8 +110,7 @@ export type ActionType =
   | "eat"
   | "rest"
   | "flee"
-  | "leave"
-  | "reenter"
+  | "socialize"
   | "wait";
 export interface Choice {
   id: string;
@@ -152,7 +151,6 @@ export interface Person {
   priceSensitivity: number;
   crowdTolerance: number;
   maxQueueWaitSeconds: number;
-  departureTimeSeconds: number;
   hunger: number;
   fatigue: number;
   stress: number;

@@ -16,9 +16,7 @@ export function settlePopulation(env: Environment): Environment {
   const settled = structuredClone(env);
   const counts: Record<string, number> = {};
   for (const [i, p] of settled.population.entries()) {
-    const preferredId = p.goals.find(
-      (g) => g.targetId && g.kind !== "exit",
-    )?.targetId;
+    const preferredId = p.goals.find((g) => g.targetId)?.targetId;
     const available = settled.places.filter(
       (place) => (counts[place.id] ?? 0) < place.admissionCapacity,
     );
