@@ -469,6 +469,7 @@ label {
   animation: impact-fade 180ms ease-out;
 }
 .impact-brief {
+  position: relative;
   width: min(680px, 100%);
   max-height: min(760px, calc(100dvh - 56px));
   overflow: auto;
@@ -487,9 +488,11 @@ label {
   justify-content: space-between;
   gap: 16px;
 }
-.impact-brief > header .eyebrow {
-  margin: 0;
-  color: #758c67;
+.impact-brief > header {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+  justify-content: flex-end;
 }
 .impact-brief > header button {
   display: grid;
@@ -505,10 +508,14 @@ label {
 }
 .impact-brief h2 {
   max-width: 580px;
-  margin: 24px 0 10px;
+  margin: 0 0 10px;
+  padding-right: 40px;
   font-size: clamp(28px, 4vw, 42px);
   line-height: 1.04;
   letter-spacing: -1.7px;
+}
+.impact-brief b {
+  font-weight: 700;
 }
 .impact-summary {
   max-width: 560px;
@@ -2062,8 +2069,11 @@ label {
     padding: 20px;
     border-radius: 14px;
   }
+  .impact-brief > header {
+    top: 20px;
+    right: 20px;
+  }
   .impact-brief h2 {
-    margin-top: 18px;
     font-size: 30px;
   }
   .impact-metrics {
