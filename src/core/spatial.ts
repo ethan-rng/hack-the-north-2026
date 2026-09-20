@@ -97,15 +97,18 @@ export function spatialLayout(
     8,
     ...data.places.map((p) => p.footprint?.depth ?? 8),
   );
-  const pitch = maxWidth + 8;
-  const aisle = venueKind === "small_venue" ? 5 : 10;
-  const rowPitch = 2 * maxDepth + aisle + 12;
-  const radius = Math.max(24, (count * (maxWidth + 8)) / (2 * Math.PI));
+  const pitch = maxWidth + 18;
+  const aisle = venueKind === "small_venue" ? 8 : 20;
+  const rowPitch = 2 * maxDepth + aisle + 22;
+  const radius = Math.max(
+    42,
+    (count * (maxWidth + 18)) / (2 * Math.PI),
+  );
   const gateSlots = order.filter((index) =>
     /\bgate\b|concourse/i.test(label(data.places[index])),
   );
   const hallSlots = order.filter((index) => !gateSlots.includes(index));
-  const concourseZ = maxWidth + aisle;
+  const concourseZ = maxWidth + aisle + 6;
   const accesses: Point[] = [];
   const places = data.places.map((place, index) => {
     const slot = order.indexOf(index);
