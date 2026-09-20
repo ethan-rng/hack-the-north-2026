@@ -10,7 +10,7 @@ import { pickStyleId, styleIds } from "./styleCatalog";
 
 const evidenceSchema = z.object({
   sourceIds: z.array(z.string().max(30)).min(1).max(5),
-  quote: z.string().min(1).max(600),
+  quote: z.string().min(1).max(1200),
 });
 import {
   capabilities,
@@ -29,13 +29,13 @@ export const generatedSchema = z.object({
     .enum(["airport", "mall", "neighborhood", "park", "small_venue", "generic"])
     .optional(),
   name: z.string().min(1).max(100),
-  summary: z.string().max(600),
-  coverage: z.string().max(600),
-  assumptions: z.array(z.string().max(400)).max(16),
+  summary: z.string().max(1200),
+  coverage: z.string().max(1200),
+  assumptions: z.array(z.string().max(800)).max(24),
   places: z
     .array(
       z.object({
-        zone: z.string().max(60).optional(),
+        zone: z.string().max(120).optional(),
         footprint: z
           .object({
             width: z.number().min(4).max(24),
@@ -69,23 +69,23 @@ export const generatedSchema = z.object({
           )
           .max(12)
           .optional(),
-        name: z.string().min(1).max(80),
-        typeLabel: z.string().max(60),
-        description: z.string().max(240),
-        tags: z.array(z.string().max(30)).max(6),
+        name: z.string().min(1).max(160),
+        typeLabel: z.string().max(100),
+        description: z.string().max(600),
+        tags: z.array(z.string().max(50)).max(12),
         capabilities: z.array(z.enum(capabilities)).min(1).max(9),
         capacity: z.number().int().min(1).max(100),
         products: z
           .array(
             z.object({
-              name: z.string().max(60),
-              category: z.string().max(30),
+              name: z.string().max(100),
+              category: z.string().max(60),
               priceCents: z.number().int().min(0).max(100000),
               stock: z.number().int().min(0).max(1000),
             }),
           )
           .max(3),
-        serviceLabel: z.string().max(70),
+        serviceLabel: z.string().max(120),
         serviceSeconds: z.number().int().min(2).max(30),
         serviceSlots: z.number().int().min(1).max(10),
         interruptible: z.boolean(),
@@ -100,17 +100,17 @@ export const generatedSchema = z.object({
           "parking_garage",
         ]),
         sourceIds: z.array(z.string().max(30)).max(5),
-        evidenceNote: z.string().max(400),
-        operatingHours: z.string().max(80).optional(),
-        permit: z.string().max(80).optional(),
-        accessibility: z.string().max(120).optional(),
-        capacityNote: z.string().max(120).optional(),
-        address: z.string().max(120).optional(),
+        evidenceNote: z.string().max(800),
+        operatingHours: z.string().max(160).optional(),
+        permit: z.string().max(160).optional(),
+        accessibility: z.string().max(240).optional(),
+        capacityNote: z.string().max(240).optional(),
+        address: z.string().max(240).optional(),
         parkingSpots: z.number().int().min(0).max(9999).optional(),
-        amenities: z.array(z.string().max(40)).max(8).optional(),
+        amenities: z.array(z.string().max(80)).max(12).optional(),
         styleId: z.enum(styleIds).optional(),
-        styleBrief: z.string().min(8).max(280).optional(),
-        competitorOf: z.string().max(40).optional(),
+        styleBrief: z.string().min(8).max(500).optional(),
+        competitorOf: z.string().max(80).optional(),
       }),
     )
     .min(6)

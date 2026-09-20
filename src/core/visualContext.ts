@@ -19,7 +19,10 @@ export const visualContextSchema = z.object({
     "mediterranean",
   ]),
   vegetation: z.enum(["deciduous", "conifer", "palm", "sparse", "planters"]),
-  description: z.string().max(300),
+  // This is model-authored scene context, not a storage boundary. Keep a
+  // generous ceiling so a useful Claude description is not rejected merely
+  // because it includes materials, climate, and setting details.
+  description: z.string().max(1200),
 });
 export type VisualContext = z.infer<typeof visualContextSchema>;
 export interface ScenePalette {

@@ -41,6 +41,13 @@ interface Bindings extends AIEnv {
 interface StoredSession extends SessionSnapshot {
   job?: { segmentId: string; working: Run };
 }
+const DEFAULT_SETUP_TIMEOUT_MS = 180000;
+function setupTimeoutMs(env: AIEnv) {
+  const parsed = Number(env.WORLD_GENERATION_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed >= 90000 && parsed <= 300000
+    ? parsed
+    : DEFAULT_SETUP_TIMEOUT_MS;
+}
 const initial = (): StoredSession => ({
   setup: { id: "", status: "idle", description: "", message: "", startedAt: 0 },
   results: [],
@@ -248,11 +255,12 @@ export class SimulationSession extends DurableObject<Bindings> {
     };
     this.ctx.storage.sql.exec("DELETE FROM frames");
     this.save(state);
-    await this.ctx.storage.setAlarm(Date.now() + 110000);
+    await this.ctx.storage.setAlarm(Date.now() + setupTimeoutMs(this.env));
     this.ctx.waitUntil(this.build(description, state.setup.id));
     return this.publicState(state);
   }
   private async build(description: string, setupId: string) {
+    const startedAt = Date.now();
     try {
       const environment = await researchEnvironment(
         this.env,
@@ -284,7 +292,18 @@ export class SimulationSession extends DurableObject<Bindings> {
       state.setup.status = "ready";
       state.setup.message = "Your populated scenario is ready";
       this.save(state);
-    } catch {
+      console.info("[setup] completed", {
+        setupId,
+        elapsedMs: Date.now() - startedAt,
+        placeCount: state.environment.places.length,
+        researchStatus: state.environment.researchStatus,
+      });
+    } catch (error) {
+      console.error("[setup] failed", {
+        setupId,
+        elapsedMs: Date.now() - startedAt,
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      });
       const state = this.load();
       if (state.setup.id !== setupId) return;
       state.setup.status = "failed";
@@ -434,10 +453,15 @@ export class SimulationSession extends DurableObject<Bindings> {
     const state = this.load();
     if (
       ["researching", "building"].includes(state.setup.status) &&
-      Date.now() - state.setup.startedAt >= 105000
+      Date.now() - state.setup.startedAt >= setupTimeoutMs(this.env) - 5000
     ) {
       state.setup.status = "failed";
       state.setup.message = "Setup exceeded its time budget. Please retry.";
+      console.warn("[setup] exceeded time budget", {
+        setupId: state.setup.id,
+        elapsedMs: Date.now() - state.setup.startedAt,
+        timeoutMs: setupTimeoutMs(this.env),
+      });
       this.save(state);
       return;
     }
@@ -548,6 +572,10 @@ export default {
           status: "ok",
           research: "Baseten + Exa, with Claude web-search fallback",
           decisions: "Cloudflare Workers AI / typesafe/jev",
+          worldGenerationProvider: env.WORLD_GENERATION_PROVIDER ?? "auto",
+          worldSynthesisModel:
+            env.ANTHROPIC_SYNTHESIS_MODEL ?? "claude-sonnet-4-6",
+          setupTimeoutMs: setupTimeoutMs(env),
           configured: !!env.BASETEN_API_KEY || !!env.ANTHROPIC_API_KEY,
         });
       // Exploratory: generate one low-poly building from a short brief. Not
