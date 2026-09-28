@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyCuratedDemoEvent,
   buildDemoEnvironment,
   demoKindForDescription,
 } from "../src/core/demoEnvironments";
 import {
   activateEvent,
   applyDecision,
-  choicesFor,
   newRun,
-  tick,
 } from "../src/core/engine";
 import {
   advanceSegment,
@@ -49,7 +46,7 @@ describe("curated demo environments", () => {
     expect(demoKindForDescription("A downtown shopping district")).toBeUndefined();
   });
 
-  it("keeps verified Yorkdale tenants and promotion products in the stable mall", () => {
+  it("keeps verified Yorkdale tenants and products in the stable mall", () => {
     const environment = buildDemoEnvironment(
       "yorkdale",
       "Yorkdale Saturday shopping",
@@ -73,37 +70,9 @@ describe("curated demo environments", () => {
         "https://yorkdale.com/store/yogen-fruz",
       ]),
     );
-    const run = newRun(environment, 400);
-    const baselineGoalCount = run.people[0].goals.length;
-    const offer = event("50% off ice cream at Yogen Früz in the food court");
-    expect(applyCuratedDemoEvent(environment, run, offer)).toBe(true);
-    expect(offer.effects).toEqual([
-      expect.objectContaining({ kind: "discount", value: 50 }),
-    ]);
-    expect(
-      run.products.find((product) => product.id === offer.effects[0].targetId)
-        ?.name,
-    ).toBe("Ice cream");
-    run.events.push(offer);
-    activateEvent(environment, run, offer);
-    const promotionCohort = run.people.filter((person) =>
-      person.goals.some((goal) => goal.sourceEventId === offer.id),
+    expect(environment.products.map((product) => product.name)).toEqual(
+      expect.arrayContaining(["Ice cream", "Jeans", "Underwear"]),
     );
-    expect(promotionCohort.length).toBeGreaterThan(20);
-    expect(promotionCohort[0].goals.length).toBeGreaterThan(
-      baselineGoalCount,
-    );
-    expect(
-      choicesFor(environment, run, promotionCohort[0]).some((choice) =>
-        choice.id.startsWith("event-response:"),
-      ),
-    ).toBe(true);
-    tick(environment, run, 301);
-    expect(
-      run.people.some((person) =>
-        person.goals.some((goal) => goal.sourceEventId === offer.id),
-      ),
-    ).toBe(false);
   });
 
   it("keeps the same 100 Yorkdale residents in every frame across promotions and threats", () => {
@@ -199,7 +168,7 @@ describe("curated demo environments", () => {
     expect(legacy.population[0].presence).toBe("not_arrived");
   });
 
-  it("prepares a 30-astronaut Mars base and a reliable alien landing sequence", () => {
+  it("prepares a 30-astronaut Mars base with a bunker", () => {
     const environment = buildDemoEnvironment(
       "mars",
       "Mars base mission control",
@@ -219,30 +188,5 @@ describe("curated demo environments", () => {
         "https://science.nasa.gov/mission/mars-2020-perseverance/",
       ]),
     );
-    const run = newRun(environment);
-    const arrival = event("aliens land on Mars");
-    expect(applyCuratedDemoEvent(environment, run, arrival)).toBe(true);
-    expect(arrival.visual).toBe("ufo");
-    expect(arrival.effects).toEqual([
-      expect.objectContaining({ kind: "threat", value: 1 }),
-    ]);
-    expect(
-      environment.places.find((place) => place.id === arrival.effects[0].targetId)
-        ?.name,
-    ).toBe("Landing Pad");
-    run.events.push(arrival);
-    activateEvent(environment, run, arrival);
-    const evacuationCohort = run.people.filter((person) =>
-      person.goals.some((goal) => goal.sourceEventId === arrival.id),
-    );
-    expect(evacuationCohort.length).toBeGreaterThan(20);
-    expect(
-      choicesFor(environment, run, evacuationCohort[0]).some(
-        (choice) =>
-          choice.id.startsWith("event-response:") &&
-          choice.type === "flee" &&
-          choice.targetId === environment.demo?.safePlaceId,
-      ),
-    ).toBe(true);
   });
 });

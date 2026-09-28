@@ -1,8 +1,7 @@
 import { compileEnvironment, type Generated } from "./generation";
 import { YORKDALE_POPULATION_SIZE } from "./population";
-import type { DemoKind, Environment, Event, Run, Source } from "./types";
+import type { DemoKind, Environment, Source } from "./types";
 
-const words = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ");
 export function demoKindForDescription(description: string): DemoKind | undefined {
   if (/\byorkdale\b/i.test(description)) return "yorkdale";
   if (/\bmars\s+(?:base|rover)\b/i.test(description)) return "mars";
@@ -225,54 +224,4 @@ export function buildDemoEnvironment(kind: DemoKind, description: string, resear
     environment.assumptions.unshift("This curated demo uses preselected NASA Mars and rover sources. The base itself is fictional and its layout is illustrative.");
   }
   return environment;
-}
-
-const findPlace = (environment: Environment, query: string) =>
-  environment.places.find((place) => words(place.name).includes(words(query)));
-const findProduct = (run: Run, name: string) =>
-  run.products.find((product) => words(product.name) === words(name));
-function promotion(event: Event, place: NonNullable<ReturnType<typeof findPlace>>, productId: string, percent: number, title: string) {
-  Object.assign(event, {
-    title,
-    description: percent + "% off is active at " + place.name + ". Every shopper knows about the offer; Jev decides who changes plans.",
-    durationSeconds: 300,
-    position: place.entry,
-    visual: "marker" as const,
-    effects: [{ kind: "discount" as const, targetId: productId, value: percent, subjectKey: null }],
-    approximationNotes: ["Curated demo promotion matched against the selected store and product. Jev still decides how each shopper responds."],
-  });
-}
-
-/** Curated effects make the planned demo reliable; every other event uses the normal interpreter. */
-export function applyCuratedDemoEvent(environment: Environment, run: Run, event: Event): boolean {
-  const text = words(event.originalText);
-  if (environment.demo?.kind === "yorkdale") {
-    const matches = [
-      { when: (value: string) => (value.includes("ice cream") || value.includes("yogen")), place: "Yogen", product: "Ice cream", percent: 50, title: "Yogen Früz deal sends shoppers toward the food court" },
-      { when: (value: string) => value.includes("levi") && value.includes("jean"), place: "Levi", product: "Jeans", percent: 20, title: "Levi's jeans offer draws a new wave of shoppers" },
-      { when: (value: string) => value.includes("zara") && value.includes("underwear"), place: "Zara", product: "Underwear", percent: 30, title: "Zara underwear sale changes the mall’s traffic pattern" },
-    ];
-    const match = matches.find((candidate) => candidate.when(text));
-    const place = match && findPlace(environment, match.place);
-    const product = match && findProduct(run, match.product);
-    if (match && place && product) {
-      promotion(event, place, product.id, match.percent, match.title);
-      return true;
-    }
-  }
-  if (environment.demo?.kind === "mars" && text.includes("alien")) {
-    const landingPad = findPlace(environment, "Landing Pad");
-    if (!landingPad) return false;
-    Object.assign(event, {
-      title: "ALIEN CRAFT TOUCHES DOWN — CREW RACES FOR COVER",
-      description: "A large unidentified craft has landed at the outpost. The landing pad is dangerous; each astronaut decides how to react.",
-      durationSeconds: 300,
-      position: landingPad.entry,
-      visual: "ufo" as const,
-      effects: [{ kind: "threat" as const, targetId: landingPad.id, value: 1, subjectKey: null }],
-      approximationNotes: ["Curated demo sequence: UFO arrival and aliens are visualized at the landing pad. Jev still chooses each astronaut’s response."],
-    });
-    return true;
-  }
-  return false;
 }

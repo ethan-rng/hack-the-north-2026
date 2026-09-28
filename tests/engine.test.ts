@@ -253,6 +253,70 @@ describe("perception, inference and baseline boundaries", () => {
       ).toHaveLength(1);
     },
   );
+  it.each([
+    "discount",
+    "threat",
+    "attraction",
+    "availability",
+    "announcement",
+  ] as const)(
+    "broadcasts %s without assigning reaction goals, emotions or actions",
+    (kind) => {
+      const { env, run } = fixture();
+      const before = structuredClone(run.people);
+      addEvent(env, run, [
+        effect(
+          kind,
+          kind === "discount" ? run.products[0].id : env.places[0].id,
+          kind === "availability" ? 0 : 1,
+        ),
+      ]);
+      for (const [index, person] of run.people.entries()) {
+        expect(person.goals).toEqual(before[index].goals);
+        expect(person.currentAction).toEqual(before[index].currentAction);
+        expect(person.placeId).toBe(before[index].placeId);
+        expect(person.mood).toBe(before[index].mood);
+        expect(person.stress).toBe(before[index].stress);
+      }
+    },
+  );
+  it("allows people with completed goals to reconsider announcements and move elsewhere", () => {
+    const { env, run } = fixture();
+    const person = run.people[0];
+    person.placeId = env.places[0].id;
+    for (const goal of person.goals) goal.status = "completed";
+    addEvent(env, run, [effect("announcement", person.placeId, 0)], {
+      originalText: "An unpleasant spill was reported here",
+    });
+    const choices = choicesFor(env, run, person);
+    expect(choices.some((choice) => choice.id === "wait")).toBe(true);
+    expect(choices.some((choice) => choice.type === "socialize")).toBe(true);
+    expect(
+      choices.some((choice) => choice.id === `move:${env.places[1].id}`),
+    ).toBe(true);
+  });
+  it("discards old scripted response goals when a saved run receives an event", () => {
+    const { env, run } = fixture();
+    const person = run.people[0];
+    const baseline = structuredClone(person.goals);
+    person.goals.push({
+      id: "old-scripted-promotion",
+      kind: "buy",
+      description: "Go to the demo promotion",
+      targetId: env.places[0].id,
+      sourceEventId: "old-event",
+      expiresAtSeconds: 999,
+      priority: 1.25,
+      status: "pending",
+    });
+    addEvent(env, run, [effect("announcement", null, 0)]);
+    expect(person.goals).toEqual(baseline);
+    const ticket = createTicket(env, run, person)!;
+    expect(ticket.context.person).toMatchObject({ goals: baseline });
+    expect(
+      ticket.choices.some((choice) => choice.id.startsWith("event-response:")),
+    ).toBe(false);
+  });
   it("ignores legacy local visibility fields when resuming stored active events", () => {
     const { env, run } = fixture();
     const event = addEvent(env, run, [effect("threat", null, 1)]);

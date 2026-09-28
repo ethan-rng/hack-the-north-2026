@@ -1,5 +1,4 @@
 import type {
-  EffectKind,
   Environment,
   Metrics,
   Person,
@@ -72,30 +71,6 @@ function actionDetail(person: Person) {
   }
 }
 
-function headline(
-  kind: EffectKind | undefined,
-  target: string | undefined,
-  visual?: "dinosaur" | "marker" | "ufo",
-) {
-  if (visual === "ufo")
-    return "ALIEN CRAFT TOUCHES DOWN — CREW RACES FOR COVER";
-  switch (kind) {
-    case "threat":
-      return "Safety alert sends the crowd into motion";
-    case "discount":
-      return target ? `Promotion pulls visitors toward ${target}` : "Promotion reshapes customer flow";
-    case "availability":
-      return target ? `${target} closure redirects visitors` : "Closure redirects visitors across the venue";
-    case "service_capacity":
-    case "service_duration":
-      return "Service change reshapes queue pressure";
-    case "attraction":
-      return "New attraction draws the crowd";
-    default:
-      return "A new event changes crowd behavior";
-  }
-}
-
 export function buildEventImpact(
   environment: Environment,
   segment: Segment,
@@ -151,7 +126,7 @@ export function buildEventImpact(
   if (reentered.length) consequences.push(`${people(reentered.length)} came back inside`);
   if (topDestinationId && topDestinationCount)
     consequences.push(
-      `${people(topDestinationCount)} rerouted to ${places.get(topDestinationId) ?? "a new destination"}`,
+      `${people(topDestinationCount)} moved to ${places.get(topDestinationId) ?? "a new destination"}`,
     );
   if (newlyStressed.length)
     consequences.push(`${people(newlyStressed.length)} reached high stress`);
@@ -163,7 +138,7 @@ export function buildEventImpact(
     consequences.push(`${Math.abs(purchaseAfter - purchaseBefore)} purchases were completed`);
   if (!consequences.length)
     consequences.push(
-      `${Math.max(0, decisionDelta)} individual Jev decisions shaped the response`,
+      `${Math.max(0, decisionDelta)} individual decisions recorded`,
     );
 
   const stories = after.people
@@ -200,20 +175,11 @@ export function buildEventImpact(
     .slice(0, 2)
     .map(({ name, detail }) => ({ name, detail }));
 
-  const targetId = event?.effects.find((effect) => effect.targetId)?.targetId;
-  const product = targetId
-    ? after.products.find((candidate) => candidate.id === targetId)
-    : undefined;
-  const target = targetId
-    ? places.get(targetId) ??
-      (product ? places.get(product.placeId) : undefined)
-    : undefined;
-  const keyEffect = event?.effects[0]?.kind;
   const firstResponse = consequences.slice(0, 2).join(". ");
   return {
     segmentId: segment.id,
-    headline: headline(keyEffect, target, event?.visual),
-    summary: `${event?.title ?? segment.originalText} reached everyone. ${firstResponse}.`,
+    headline: event?.title || segment.originalText,
+    summary: `Over ${Math.max(0, after.time - before.time)} simulated seconds: ${firstResponse}.`,
     metrics: [
       {
         label: "People inside",

@@ -6,11 +6,13 @@
 2. Start with the Yorkdale scenario, then reset or start a fresh session before the Mars scenario.
 3. Let each 30-second event segment finish processing, read its impact headline, then play the recorded scene for the audience.
 
+Every submitted event goes through the AI interpreter, including events in the Yorkdale and Mars environments. Jev receives the original wording and interpreted conditions for each person's decision. The engine does not assign promotion or evacuation goals to preset groups. Reactions vary; describe what the recording shows.
+
 ## Demo 1: Yorkdale shopping mall
 
 ### Start the environment
 
-Enter any scenario description containing **Yorkdale**. The app should select the enhanced Yorkdale mall world while still showing it as a generated scenario.
+Enter any scenario description containing **Yorkdale**. The app selects the curated Yorkdale mall world with a fixed population of 100 people.
 
 The scene uses an original, general mall layout rather than a map of Yorkdale. Its stores include real Yorkdale merchants, with live source links shown in the app:
 
@@ -23,11 +25,13 @@ The scene uses an original, general mall layout rather than a map of Yorkdale. I
 Submit these events in order:
 
 1. **“50% off ice cream at Yogen Früz in the food court.”**
-   Show the impact headline, then play the crowd moving toward Yogen Früz and the food-court area.
+   Inspect the interpreted discount, then observe whether shoppers change destinations or make purchases.
 2. **“Levi's is selling jeans for 20% off.”**
-   Show the headline and the shift in shoppers’ goals and traffic toward Levi's.
+   Observe individual decisions and any recorded change in traffic toward Levi's.
 3. **“Zara is selling underwear for 30% off.”**
    Show the final headline, crowd response, and the timeline chapters created by the three events.
+
+For a contrasting situation, reset and submit **“Someone threw up inside Yogen Früz.”** Check that the interpretation describes the incident, then observe whether people choose to leave or avoid that store. They remain within the mall; headcount stays at 100. Store names and products do not trigger preset offers.
 
 ### Message to land
 
@@ -47,7 +51,7 @@ Submit:
 
 > **“Aliens land on Mars.”**
 
-After processing completes, show the impact headline and play the segment. A UFO arrives and lands, large threatening aliens emerge, and astronauts react through Jev decisions. People who flee move faster toward the base’s designated safehouse/bunker.
+After processing completes, inspect how the event was interpreted and play the segment. The interpretation determines the visual and effects. Astronauts choose how to respond; mentioning aliens does not automatically trigger a threat or evacuation.
 
 ### Message to land
 
@@ -56,7 +60,8 @@ The same simulation system can handle an unexpected event while retaining indivi
 ## Build acceptance checks
 
 - Any prompt containing **yorkdale** activates the Yorkdale enhanced world; any prompt containing **mars base** activates the Mars enhanced world, case-insensitively.
-- Other prompts still use normal research-backed generation and support off-script events in either demo world.
-- Yorkdale research runs for real and exposes the merchant sources above in the UI; the demo scene does not pretend to be an exact Yorkdale floor plan.
-- The scripted events remain valid executable events, but Jev continues to choose each person’s response.
-- The Mars alien arrival has a reliable visual sequence: UFO entrance, landing, large aliens appearing, then fast evacuation toward the bunker.
+- Other environment prompts use normal research-backed generation. All event prompts use the interpreter in every world.
+- Yorkdale exposes the curated merchant sources above in the UI and identifies the scene as an illustrative layout.
+- Incident, closure, negation and promotion prompts preserve their different meanings and stated amounts through the interpreter.
+- No preset group receives shopping or evacuation goals. Each person's reaction follows their own Jev decision.
+- Impact headlines describe the interpreted event; metrics and consequences report observed recording values without claiming predetermined crowd movements.

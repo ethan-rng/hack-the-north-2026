@@ -6,7 +6,6 @@ import type {
   Effect,
   Environment,
   Event,
-  Goal,
   Metrics,
   Person,
   Point,
@@ -299,20 +298,6 @@ function socialChoices(env: Environment, run: Run, p: Person): Choice[] {
     },
   ];
 }
-function eventResponseGoal(p: Person, now: number) {
-  return p.goals
-    .filter(
-      (goal) =>
-        goal.status === "pending" &&
-        !!goal.sourceEventId &&
-        (goal.expiresAtSeconds === undefined || goal.expiresAtSeconds > now),
-    )
-    .sort(
-      (a, b) =>
-        (b.expiresAtSeconds ?? Number.NEGATIVE_INFINITY) -
-        (a.expiresAtSeconds ?? Number.NEGATIVE_INFINITY),
-    )[0];
-}
 export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
   if (p.presence !== "inside") return [];
   if (
@@ -323,34 +308,28 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
     )
   )
     return [];
-  const threatened = run.events.some(
-    (e) =>
-      e.status === "active" &&
-      p.knownEventIds.includes(e.id) &&
-      e.effects.some((f) => f.kind === "threat"),
+  const activeEvents = run.events.filter(
+    (event) => event.status === "active" && p.knownEventIds.includes(event.id),
   );
-  if (!threatened && p.goals.every((goal) => goal.status === "completed"))
+  const threatened = activeEvents.some((event) =>
+    event.effects.some((effect) => effect.kind === "threat"),
+  );
+  const goalsCompleted = p.goals.every((goal) => goal.status === "completed");
+  if (!activeEvents.length && goalsCompleted)
     return socialChoices(env, run, p);
   const choices: Choice[] = [];
-  const response = eventResponseGoal(p, run.time);
-  if (response?.targetId && p.placeId !== response.targetId) {
-    const target = env.places.find((place) => place.id === response.targetId);
-    if (target && placeOpen(run, target.id))
-      choices.push({
-        id: `event-response:${response.id}`,
-        type: response.responseAction ?? "move",
-        targetId: target.id,
-        label:
-          response.responseAction === "flee"
-            ? `Respond to the alert: move quickly to ${target.name}`
-            : `Respond to the current event at ${target.name}`,
-      });
-  }
   choices.push({
     id: "wait",
     type: "wait",
     label: "Wait here briefly and observe",
   });
+  if (goalsCompleted)
+    choices.push({
+      id: "socialize",
+      type: "socialize",
+      targetId: p.placeId,
+      label: "Stay here and chat with nearby peers",
+    });
   if (threatened) {
     const threatenedPlaceIds = new Set(
       run.events
@@ -380,23 +359,14 @@ export function choicesFor(env: Environment, run: Run, p: Person): Choice[] {
             occupancy(run, b.id) / b.admissionCapacity ||
           a.id.localeCompare(b.id),
       );
-    // The Mars demo designates a real bunker. It remains only an available
-    // Jev choice; individual astronauts still decide whether to take it.
-    const safePlace =
-      safePlaces.find((place) => place.id === env.demo?.safePlaceId) ??
-      safePlaces.sort(
-        (a, b) =>
-          occupancy(run, a.id) / a.admissionCapacity -
-            occupancy(run, b.id) / b.admissionCapacity ||
-          a.id.localeCompare(b.id),
-      )[0];
+    const safePlace = safePlaces[0];
     if (safePlace)
-    choices.push({
-      id: `flee:${safePlace.id}`,
-      type: "flee",
-      targetId: safePlace.id,
-      label: `Move quickly to safety at ${safePlace.name}`,
-    });
+      choices.push({
+        id: `flee:${safePlace.id}`,
+        type: "flee",
+        targetId: safePlace.id,
+        label: `Move quickly to safety at ${safePlace.name}`,
+      });
   }
   if (p.foodHeld > 0)
     choices.push({
@@ -496,6 +466,7 @@ export function createTicket(
   const perceived = run.events
     .filter((e) => p.knownEventIds.includes(e.id))
     .map((e) => ({
+      originalText: e.originalText,
       title: e.title,
       description: e.description,
       active: e.status === "active",
@@ -764,134 +735,14 @@ export function activateEvent(env: Environment, run: Run, event: Event) {
   perceiveEvents(env, run);
   run.revision++;
 }
-function belongsToCohort(p: Person, key: string, denominator: number, take: number) {
-  const ordinal = Number(p.id.match(/\d+$/)?.[0] ?? 0);
-  const hash = [...key].reduce(
-    (sum, character) => sum + character.charCodeAt(0),
-    0,
-  );
-  return (ordinal + hash) % denominator < take;
-}
-function addEventResponseGoal(
-  p: Person,
-  event: Event,
-  targetId: string,
-  kind: Goal["kind"],
-  description: string,
-  responseAction: Goal["responseAction"] = "move",
-  targetCategory?: string,
-) {
-  const id = `event-response:${event.id}:${targetId}`;
-  if (p.goals.some((goal) => goal.id === id)) return;
-  p.goals.push({
-    id,
-    kind,
-    targetId,
-    ...(targetCategory ? { targetCategory } : {}),
-    description,
-    sourceEventId: event.id,
-    expiresAtSeconds: event.startTimeSeconds + event.durationSeconds,
-    responseAction,
-    priority: 1.25,
-    status: "pending",
-  });
-}
-function attachEventResponseGoal(
-  env: Environment,
-  run: Run,
-  event: Event,
-  p: Person,
-  effect: Effect,
-) {
-  if (effect.kind === "discount" && effect.targetId) {
-    const product = run.products.find(
-      (candidate) => candidate.id === effect.targetId,
-    );
-    if (
-      product &&
-      p.priceSensitivity >= 0.1 &&
-      belongsToCohort(p, event.id + product.id, 4, 2)
-    ) {
-      const place = env.places.find((candidate) => candidate.id === product.placeId);
-      if (place)
-        addEventResponseGoal(
-          p,
-          event,
-          place.id,
-          "buy",
-          `Respond to event: consider the ${effect.value}% ${product.name} promotion at ${place.name}`,
-          "move",
-          product.category,
-        );
-    }
-    return;
-  }
-  if (effect.kind === "threat") {
-    const threatened = effect.targetId;
-    const safe =
-      env.places.find((place) => place.id === env.demo?.safePlaceId) ??
-      env.places.find(
-        (place) =>
-          place.id !== threatened &&
-          place.capabilities.includes("rest") &&
-          placeOpen(run, place.id),
-      ) ??
-      env.places.find(
-        (place) => place.id !== threatened && placeOpen(run, place.id),
-      );
-    if (safe && belongsToCohort(p, event.id + safe.id, 6, 5))
-      addEventResponseGoal(
-        p,
-        event,
-        safe.id,
-        "visit",
-        `Respond to safety alert: reach ${safe.name}`,
-        "flee",
-      );
-    return;
-  }
-  if (effect.kind === "availability" && effect.targetId && effect.value <= 0) {
-    const affected = p.goals.some(
-      (goal) => goal.status === "pending" && goal.targetId === effect.targetId,
-    );
-    const closed = env.places.find((place) => place.id === effect.targetId);
-    const alternative =
-      closed &&
-      env.places.find(
-        (place) =>
-          place.id !== closed.id &&
-          placeOpen(run, place.id) &&
-          place.capabilities.some((capability) =>
-            closed.capabilities.includes(capability),
-          ),
-      );
-    if (affected && alternative)
-      addEventResponseGoal(
-        p,
-        event,
-        alternative.id,
-        "visit",
-        `Respond to closure: reroute to ${alternative.name}`,
-      );
-    return;
-  }
-  if (effect.kind === "attraction" && effect.targetId) {
-    const place = env.places.find((candidate) => candidate.id === effect.targetId);
-    if (place && belongsToCohort(p, event.id + place.id, 5, 2))
-      addEventResponseGoal(
-        p,
-        event,
-        place.id,
-        "visit",
-        `Respond to event: visit ${place.name}`,
-      );
-  }
-}
 function perceiveEvents(env: Environment, run: Run) {
+  // Remove reaction goals injected by earlier versions when resuming a saved run.
+  for (const person of run.people)
+    person.goals = person.goals.filter((goal) => !goal.sourceEventId);
   for (const event of run.events.filter((e) => e.status === "active")) {
     for (const p of run.people) {
       if (p.knownEventIds.includes(event.id)) continue;
-      // Global events also reach people outside, who can decide to return.
+      // Everyone learns the event; each person's next decision determines their response.
       // Legacy stored awareness/radius fields are intentionally ignored.
       p.knownEventIds.push(event.id);
       remember(p, `Learned: ${event.title}`);
@@ -912,11 +763,6 @@ function perceiveEvents(env: Environment, run: Run) {
             relevant = true;
           }
         } else relevant = true;
-        attachEventResponseGoal(env, run, event, p, effect);
-        if (effect.kind === "threat") {
-          p.stress = clamp(p.stress + 0.4 * (1 - p.crowdTolerance / 2));
-          p.mood = "frightened";
-        }
       }
       if (
         relevant &&
@@ -1094,13 +940,6 @@ export function tick(env: Environment, run: Run, seconds = 1) {
       event.startTimeSeconds + event.durationSeconds <= run.time
     )
       event.status = "completed";
-  for (const p of run.people)
-    p.goals = p.goals.filter(
-      (goal) =>
-        !goal.sourceEventId ||
-        goal.expiresAtSeconds === undefined ||
-        goal.expiresAtSeconds > run.time,
-    );
   perceiveEvents(env, run);
   for (const p of run.people) {
     if (p.presence !== "inside") {
