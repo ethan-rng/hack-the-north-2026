@@ -37,8 +37,6 @@ const queued = (frame: ReplayFrame) =>
     (sum, service) => sum + service.queue.length,
     0,
   );
-const inside = (frame: ReplayFrame) =>
-  frame.people.filter((person) => person.presence === "inside").length;
 const people = (count: number) => `${count} ${count === 1 ? "person" : "people"}`;
 const change = (before: number, after: number, format = (n: number) => `${n}`) => {
   const value = after - before;
@@ -181,10 +179,6 @@ export function buildEventImpact(
     headline: event?.title || segment.originalText,
     summary: `Over ${Math.max(0, after.time - before.time)} simulated seconds: ${firstResponse}.`,
     metrics: [
-      {
-        label: "People inside",
-        ...change(inside(before), inside(after)),
-      },
       { label: "People queued", ...change(queueBefore, queueAfter) },
       { label: "Purchases", ...change(purchaseBefore, purchaseAfter) },
       {

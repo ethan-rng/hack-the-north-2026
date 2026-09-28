@@ -69,11 +69,13 @@ describe("event impact brief", () => {
     expect(impact?.headline).toBe("Safety alert announced");
     expect(impact?.metrics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: "People inside", delta: "−1" }),
         expect.objectContaining({ label: "People queued", delta: "+1" }),
         expect.objectContaining({ label: "Purchases", delta: "+2" }),
         expect.objectContaining({ label: "Revenue", delta: "+$9.00" }),
       ]),
+    );
+    expect(impact?.metrics.map((metric) => metric.label)).not.toContain(
+      "People inside",
     );
     expect(impact?.consequences).toEqual(
       expect.arrayContaining([
