@@ -1,4 +1,5 @@
 import { compileEnvironment, type Generated } from "./generation";
+import { YORKDALE_POPULATION_SIZE } from "./population";
 import type { DemoKind, Environment, Event, Run, Source } from "./types";
 
 const words = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ");
@@ -122,7 +123,7 @@ const yorkdale = (): Generated => ({
     { fromPlace: 6, toPlace: 8, weight: 1 }, { fromPlace: 7, toPlace: 9, weight: 2 }, { fromPlace: 8, toPlace: 10, weight: 2 }, { fromPlace: 9, toPlace: 11, weight: 1 },
     { fromPlace: 10, toPlace: 11, weight: 1 }, { fromPlace: 11, toPlace: 12, weight: 3 },
   ],
-  populationSize: 120,
+  populationSize: YORKDALE_POPULATION_SIZE,
 });
 
 const mars = (): Generated => ({

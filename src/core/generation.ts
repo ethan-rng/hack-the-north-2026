@@ -388,7 +388,7 @@ export function compileEnvironment(
     assumptions: [
       ...data.assumptions,
       ...spatial.info.notes,
-      "Population cohorts and arrival schedules are synthetic; budgets, prices, stock, capacity, service times and preferences are assumed. Groups share purposes but make individual decisions.",
+      "Population cohorts are synthetic and remain inside throughout the simulation; budgets, prices, stock, capacity, service times and preferences are assumed. Groups share purposes but make individual decisions.",
       "Free non-retail services use independent timed slots. No synchronized rides, screening or boarding rules.",
       "Results illustrate this scenario; they do not forecast real sales or evacuation safety.",
     ],

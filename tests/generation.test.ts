@@ -230,7 +230,8 @@ describe("venue-aware generation", () => {
     expect(group.length).toBeGreaterThan(1);
     expect(new Set(group.map((p) => p.goals[0].targetId)).size).toBe(1);
     expect(new Set(group.map((p) => p.goals[0].subjectKey)).size).toBe(1);
-    expect(new Set(group.map((p) => p.departureSeconds)).size).toBe(1);
+    expect(new Set(group.map((p) => p.goals[0].deadlineSeconds)).size).toBe(1);
+    expect(first.goals[0].deadlineSeconds).toBeGreaterThan(0);
     expect(new Set(env.population.map((p) => p.goals[0].subjectKey)).size).toBe(
       2,
     );
@@ -264,27 +265,42 @@ describe("venue-aware generation", () => {
     );
   });
 
-  it("keeps future groups absent until their scheduled arrival and preserves them on reset", () => {
-    const env = settlePopulation(compile(configuration("park")));
-    const run = newScenario(env);
-    const pending = run.people.find((p) => p.presence === "not_arrived")!;
-    expect(pending).toBeDefined();
-    expect(pending.placeId).toBeUndefined();
-    expect(pending.currentAction).toBeNull();
-    expect(choicesFor(env, run, pending)).toEqual([]);
-    run.status = "running";
-    tick(env, run, pending.arrivalSeconds! - 1);
-    expect(pending.presence).toBe("not_arrived");
-    tick(env, run);
-    expect(pending.presence).toBe("inside");
-    expect(pending.position).toEqual(env.exit);
-    const group = run.people.filter((p) => p.groupId === pending.groupId);
-    expect(group.every((p) => p.presence === "inside")).toBe(true);
-    expect(
-      newScenario(env).people.find((p) => p.id === pending.id)?.presence,
-    ).toBe("not_arrived");
-    expect(run.transactions).toEqual([]);
-  });
+  it.each<VenueKind>([
+    "mall",
+    "airport",
+    "park",
+    "neighborhood",
+    "small_venue",
+    "generic",
+  ])(
+    "keeps the entire %s population inside from setup through playback and reset",
+    (kind) => {
+      const generated = compile(configuration(kind));
+      expect(generated.population.every((p) => p.presence === "inside")).toBe(
+        true,
+      );
+      expect(
+        generated.population.every(
+          (p) =>
+            p.arrivalSeconds === undefined && p.departureSeconds === undefined,
+        ),
+      ).toBe(true);
+      const env = settlePopulation(generated);
+      const run = newScenario(env);
+      const ids = run.people.map((p) => p.id);
+      expect(run.people.every((p) => p.presence === "inside")).toBe(true);
+      run.status = "running";
+      for (let seconds = 0; seconds < 600; seconds++) {
+        tick(env, run);
+        expect(run.people.every((p) => p.presence === "inside")).toBe(true);
+      }
+      expect(run.people.map((p) => p.id)).toEqual(ids);
+      const reset = newScenario(env);
+      expect(reset.people.map((p) => p.id)).toEqual(ids);
+      expect(reset.people.every((p) => p.presence === "inside")).toBe(true);
+      expect(run.transactions).toEqual([]);
+    },
+  );
 });
 
 afterEach(() => vi.unstubAllGlobals());

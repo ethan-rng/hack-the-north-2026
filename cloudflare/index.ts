@@ -21,6 +21,7 @@ import type {
   SessionSnapshot,
 } from "../src/core/types";
 import { decide, interpretEvent, researchEnvironment, type AIEnv } from "./ai";
+import { YORKDALE_POPULATION_SIZE } from "../src/core/population";
 
 interface Bindings extends AIEnv {
   SESSIONS: DurableObjectNamespace<SimulationSession>;
@@ -181,7 +182,16 @@ export class SimulationSession extends DurableObject<Bindings> {
     if (!reset && state.run) return this.publicState(state);
     if (state.run && state.run.time > 0 && !state.results.length)
       state.results.push(resultFor(state.run, "Run A"));
-    state.environment = settlePopulation(state.environment);
+    const environment = settlePopulation(state.environment);
+    if (
+      environment.population.length !== state.environment.population.length ||
+      state.environment.population.some((person) => person.presence !== "inside")
+    ) {
+      // A changed starting population cannot share the old comparison baseline.
+      environment.baselineId = uid();
+      state.results = [];
+    }
+    state.environment = environment;
     state.run = newScenario(state.environment);
     state.segments = [];
     this.ctx.storage.sql.exec("DELETE FROM frames");
@@ -211,9 +221,21 @@ export class SimulationSession extends DurableObject<Bindings> {
   async submitEvent(text: string, runId?: string, expectedTime?: number) {
     const state = this.load(),
       run = state.run;
-    if (!run || run.status === "finished")
+    if (!run || run.status === "finished" || !state.environment)
       return failure(409, "Open a scenario or reset before adding an event");
     if (state.job) return failure(409, "An event is already processing");
+    const populationSize =
+      state.environment.demo?.kind === "yorkdale"
+        ? YORKDALE_POPULATION_SIZE
+        : state.environment.population.length;
+    if (
+      run.people.length !== populationSize ||
+      run.people.some((person) => person.presence !== "inside")
+    )
+      return failure(
+        409,
+        `Reset this scenario to start with a fixed population of ${populationSize} people. Everyone will remain inside.`,
+      );
     if (
       (runId && runId !== run.runId) ||
       (expectedTime !== undefined && expectedTime !== run.time)

@@ -1,4 +1,5 @@
 import { newRun, choicesFor, createTicket, tick, uid } from "./engine";
+import { residentPopulation } from "./population";
 import type {
   DecisionTicket,
   Environment,
@@ -14,9 +15,9 @@ export const MAX_SEGMENT_CALLS = 240;
 /** Start in an established venue without using inference or fabricating sales. */
 export function settlePopulation(env: Environment): Environment {
   const settled = structuredClone(env);
+  settled.population = residentPopulation(settled);
   const counts: Record<string, number> = {};
   for (const [i, p] of settled.population.entries()) {
-    if (p.presence === "not_arrived") continue;
     const preferredId = p.goals.find((g) => g.targetId)?.targetId;
     const available = settled.places.filter(
       (place) => (counts[place.id] ?? 0) < place.admissionCapacity,
@@ -41,8 +42,17 @@ export function settlePopulation(env: Environment): Environment {
       if (goal.targetId === place.id && ["visit", "reach"].includes(goal.kind))
         goal.status = "completed";
   }
-  const note =
-    "The opening population is already distributed through the venue. Initial placement and activities are assumed; scheduled groups arrive during simulation, and no historical sales are fabricated.";
+  const note = `All ${settled.population.length} people are present from the start and remain inside the environment. Initial placement and activities are assumed, and no historical sales are fabricated.`;
+  settled.assumptions = settled.assumptions
+    .filter(
+      (assumption) => !assumption.includes("scheduled groups arrive during simulation"),
+    )
+    .map((assumption) =>
+      assumption.replace(
+        "Population cohorts and arrival schedules are synthetic;",
+        "Population cohorts are synthetic and remain inside throughout the simulation;",
+      ),
+    );
   if (!settled.assumptions.includes(note)) settled.assumptions.push(note);
   return settled;
 }
@@ -50,7 +60,6 @@ export function newScenario(env: Environment): Run {
   const run = newRun(env, 86400);
   run.status = "paused";
   for (const [i, p] of run.people.entries()) {
-    if (p.presence === "not_arrived") continue;
     const place = env.places.find((place) => place.id === p.placeId);
     const type = place?.capabilities.includes("browse")
       ? "browse"

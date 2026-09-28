@@ -1,5 +1,23 @@
 import type { Environment, Goal, Person, Place } from "./types";
 
+export const YORKDALE_POPULATION_SIZE = 100;
+
+/** Start and reset with everyone inside, including environments saved before arrivals were removed. */
+export function residentPopulation(env: Environment): Person[] {
+  const people = structuredClone(
+    env.demo?.kind === "yorkdale"
+      ? env.population.slice(0, YORKDALE_POPULATION_SIZE)
+      : env.population,
+  );
+  for (const person of people) {
+    if (person.presence !== "inside") person.nextDecisionAt = 0;
+    person.presence = "inside";
+    delete person.arrivalSeconds;
+    delete person.departureSeconds;
+  }
+  return people;
+}
+
 type Profile = {
   role: string;
   purpose: string;
@@ -35,7 +53,6 @@ export function contextualPopulation(
   let group = -1,
     remaining = 0,
     profile: Profile,
-    arrival = 0,
     destination: Place | undefined;
   return people.map((person) => {
     if (!remaining) {
@@ -51,7 +68,7 @@ export function contextualPopulation(
         purpose: family
           ? "Spend time together and visit attractions"
           : mode === 1
-            ? "Get a meal before returning to work"
+            ? "Get a meal during a work break"
             : "Explore and browse",
         groupSize: family ? 2 + Math.floor(rng() * 3) : mode === 1 ? 1 : 2,
         budget: family ? 5000 : mode === 1 ? 1800 : 3500,
@@ -95,16 +112,10 @@ export function contextualPopulation(
       }
       destination = profile.target ?? env.places[group % env.places.length];
       remaining = profile.groupSize;
-      // Most visitors are present when opened. Later groups enter together during playback.
-      arrival =
-        group > 0 && group % 5 === 0
-          ? 10 + (group % 3) * 10
-          : -(30 + Math.floor(rng() * 90));
     }
     remaining--;
     const target = destination!;
-    const departure =
-      (kind === "airport" ? 0 : Math.max(0, arrival)) + profile!.stay;
+    const departure = profile!.stay;
     const goal = (
       suffix: string,
       kind: Goal["kind"],
@@ -172,10 +183,8 @@ export function contextualPopulation(
       roleLabel: profile!.role,
       groupId: `group-${group + 1}`,
       purpose: profile!.purpose,
-      arrivalSeconds: arrival,
-      departureSeconds: departure,
-      presence: arrival > 0 ? "not_arrived" : "inside",
-      nextDecisionAt: Math.max(0, arrival),
+      presence: "inside",
+      nextDecisionAt: 0,
       goals,
       budgetRemainingCents: Math.round(profile!.budget * (0.85 + rng() * 0.3)),
       priceSensitivity: Math.max(

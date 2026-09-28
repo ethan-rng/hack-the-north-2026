@@ -1,3 +1,4 @@
+import { residentPopulation } from "./population";
 import type {
   Action,
   Choice,
@@ -120,7 +121,7 @@ export function newRun(env: Environment, duration = 180): Run {
     time: 0,
     revision: 0,
     duration,
-    people: structuredClone(env.population),
+    people: residentPopulation(env),
     products: structuredClone(env.products),
     services: Object.fromEntries(
       env.services.map((s) => [s.id, { queue: [], active: [] }]),
@@ -517,8 +518,6 @@ export function createTicket(
         goals: p.goals,
         groupId: p.groupId,
         purpose: p.purpose,
-        arrivalSeconds: p.arrivalSeconds,
-        departureSeconds: p.departureSeconds,
         companions: p.groupId
           ? run.people
               .filter(
@@ -1104,19 +1103,12 @@ export function tick(env: Environment, run: Run, seconds = 1) {
     );
   perceiveEvents(env, run);
   for (const p of run.people) {
-    if (p.presence === "not_arrived") {
-      if ((p.arrivalSeconds ?? 0) > run.time) continue;
-      p.presence = "inside";
-      p.position = { ...env.exit };
-      p.nextDecisionAt = run.time;
-      remember(p, "Arrived with the scheduled visitor group");
-    }
-    if (p.presence === "exited") {
+    if (p.presence !== "inside") {
       p.presence = "inside";
       p.position = { ...env.exit };
       p.currentAction = null;
       p.nextDecisionAt = run.time;
-      remember(p, "Returned inside when exits were closed");
+      remember(p, "Remains inside the fixed simulation population");
     }
     p.hunger = clamp(p.hunger + dt * 0.0008);
     p.fatigue = clamp(p.fatigue + dt * 0.0006);

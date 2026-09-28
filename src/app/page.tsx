@@ -291,13 +291,7 @@ function PersonInspector({
       {p.purpose && <p>{p.purpose}</p>}
       {p.groupId && (
         <p className="muted">
-          {p.groupId.replace("group-", "Group ")} ·{" "}
-          {p.presence === "not_arrived"
-            ? `Arrives at ${p.arrivalSeconds}s`
-            : "Already arrived"}
-          {p.departureSeconds !== undefined
-            ? ` · Plans until ${p.departureSeconds}s`
-            : ""}
+          {p.groupId.replace("group-", "Group ")}
         </p>
       )}
       <div className="inline-tags">
@@ -1536,7 +1530,7 @@ export default function Page() {
                   </span>
                   <span>
                     <Users size={16} />
-                    40 people
+                    {env!.population.length} people
                   </span>
                   <span>
                     <Globe2 size={16} />
