@@ -1,3 +1,4 @@
+import { mockBudgetBinding } from "./helpers/budget";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   compileEnvironment,
@@ -50,7 +51,11 @@ const source = (id: string, excerpt: string): Source => ({
 describe("venue-aware generation", () => {
   it("loads curated Yorkdale and Mars demos without any live research request", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const env = { BASETEN_API_KEY: "test", BASETEN_MODEL: "test" } as AIEnv;
+    const env = {
+      AI_BUDGET: mockBudgetBinding(),
+      BASETEN_API_KEY: "test",
+      BASETEN_MODEL: "test",
+    } as AIEnv;
     vi.useFakeTimers();
     const yorkdalePromise = researchEnvironment(
       env,
@@ -256,8 +261,7 @@ describe("venue-aware generation", () => {
     );
     // Diversity: fewer than half the places may share the same style.
     const counts = new Map<string, number>();
-    for (const s of styles as string[])
-      counts.set(s, (counts.get(s) ?? 0) + 1);
+    for (const s of styles as string[]) counts.set(s, (counts.get(s) ?? 0) + 1);
     const maxRepeats = Math.max(...counts.values());
     expect(maxRepeats).toBeLessThanOrEqual(
       Math.max(1, Math.floor(env.places.length / 2)),
@@ -338,7 +342,11 @@ describe("structured research", () => {
     );
     const stages: string[] = [];
     const env = await researchEnvironment(
-      { BASETEN_API_KEY: "test", BASETEN_MODEL: "test" } as AIEnv,
+      {
+        AI_BUDGET: mockBudgetBinding(),
+        BASETEN_API_KEY: "test",
+        BASETEN_MODEL: "test",
+      } as AIEnv,
       "Test mall",
       "test",
       (s) => stages.push(s),

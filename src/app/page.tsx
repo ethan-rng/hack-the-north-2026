@@ -96,6 +96,7 @@ function Sparkline({
   );
 }
 function formatError(e: unknown): string {
+  if (e instanceof ApiError && e.status === 402) return e.message;
   if (e instanceof ApiError) {
     const parts: string[] = [];
     if (e.status) parts.push(`[${e.status}]`);

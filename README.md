@@ -51,6 +51,18 @@ npm run deploy
 
 Only the Baseten inference key is a Worker secret. `BASETEN_MODEL` and `AI_GATEWAY_ID` are nonsecret configuration. The existing Cloudflare account/gateway must have Jev access and available credits. `npm run worker:dev`, `worker:deploy`, and `worker:tail` target the new app Worker. The separate `services/jev-worker` has its own deployment configuration.
 
+## Project AI budget
+
+The deployed project has one **$5 USD additional Cloudflare AI allowance**, starting when the budget guard is deployed. It is shared by all browser sessions, the app Worker and the authenticated team Jev Worker. There is no daily/monthly reset. Cloning the repository does not grant Cloudflare account access or credentials; calling the public deployed app can spend this shared allowance.
+
+A SQLite Durable Object (`ProjectAiBudget`) reserves a conservative maximum cost before each Cloudflare AI call, then settles against returned token usage. Reservations are atomic across Workers and survive restarts. Requests with unknown usage or upstream errors consume their full reservation; abandoned reservations remain reserved. When settled spending cannot cover the next request's maximum cost, the project stops permanently. Requests blocked only by concurrent reservations receive a temporary 429 instead.
+
+After exhaustion, new mutation requests return HTTP 402 with: **“The allocated budget for this project has been reached. No further AI requests can be processed.”** Background processing stops, and errors propagate without retrying through another provider. Saved results and playback remain readable. `GET /api/budget` exposes the allowance and its accounted/reserved balance, never credentials. Missing/unavailable budget storage blocks paid work with HTTP 503.
+
+The allowance uses the published model prices documented in [the budget implementation](shared/ai-budget.ts). Conservative reservations can stop the project before the full $5 is billed. This is a Worker-side inference allowance, not an account-wide invoice cap: Workers/DO/storage charges and direct Baseten/Anthropic spending are outside the $5 accounting, although new calls to those providers are also blocked once the project budget is exhausted. No native Gateway spending setting is changed.
+
+Deploy the main app first, then `services/jev-worker`, so both point at the same budget namespace. The optional legacy `worker/` proxy also requires that binding; it must not be deployed without it. Redeploying, clearing cookies, or creating new sessions does not replenish the allowance. There is deliberately no public reset endpoint. Keep the namespace and `PROJECT_BUDGET_ID` stable.
+
 ## Data and engine boundaries
 
 - [src/core/types.ts](src/core/types.ts): shared contracts. [generation.ts](src/core/generation.ts): Zod validation and compilation; [spatial.ts](src/core/spatial.ts): venue templates, coordinate evidence, footprints and routes; [population.ts](src/core/population.ts): seeded visitor cohorts and arrival schedules. [engine.ts](src/core/engine.ts): authoritative state transitions, perception, queues, services, transactions and metrics. [playback.ts](src/core/playback.ts): settled initial population, bounded processing and historical frames.

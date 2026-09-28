@@ -1,3 +1,10 @@
+export { ProjectAiBudget } from "./budget";
+import {
+  assertProjectBudget,
+  budgetErrorResponse,
+  getProjectBudget,
+  isBudgetError,
+} from "../shared/ai-budget";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 import {
@@ -120,6 +127,12 @@ export class SimulationSession extends DurableObject<Bindings> {
     return { segmentId, runId: segment.runId, frames } satisfies Recording;
   }
   async generate(description: string) {
+    try {
+      await assertProjectBudget(this.env);
+    } catch (error) {
+      if (isBudgetError(error)) return failure(error.status, error.message);
+      throw error;
+    }
     const previous = this.load();
     if (["researching", "building"].includes(previous.setup.status))
       return failure(409, "An environment is already being generated");
@@ -160,12 +173,13 @@ export class SimulationSession extends DurableObject<Bindings> {
       state.setup.status = "ready";
       state.setup.message = "Your populated scenario is ready";
       this.save(state);
-    } catch {
+    } catch (error) {
       const state = this.load();
       if (state.setup.id !== setupId) return;
       state.setup.status = "failed";
-      state.setup.message =
-        "Setup could not finish. Revise the description or try again.";
+      state.setup.message = isBudgetError(error)
+        ? error.message
+        : "Setup could not finish. Revise the description or try again.";
       this.save(state);
     }
   }
@@ -209,6 +223,12 @@ export class SimulationSession extends DurableObject<Bindings> {
     return this.publicState(state);
   }
   async submitEvent(text: string, runId?: string, expectedTime?: number) {
+    try {
+      await assertProjectBudget(this.env);
+    } catch (error) {
+      if (isBudgetError(error)) return failure(error.status, error.message);
+      throw error;
+    }
     const state = this.load(),
       run = state.run;
     if (!run || run.status === "finished")
@@ -297,17 +317,19 @@ export class SimulationSession extends DurableObject<Bindings> {
       this.record(segmentId, captureFrame(state.job.working));
       this.save(state);
       await this.ctx.storage.setAlarm(Date.now() + 10);
-    } catch {
+    } catch (error) {
       const state = this.load();
       if (state.job?.segmentId !== segmentId) return;
       this.failSegment(
         state,
-        "Event interpretation was unavailable or timed out. Your scenario has not changed; try again.",
+        isBudgetError(error)
+          ? error.message
+          : "Event interpretation was unavailable or timed out. Your scenario has not changed; try again.",
       );
     }
   }
   async alarm() {
-    const state = this.load();
+    let state = this.load();
     if (
       ["researching", "building"].includes(state.setup.status) &&
       Date.now() - state.setup.startedAt >= 105000
@@ -318,6 +340,18 @@ export class SimulationSession extends DurableObject<Bindings> {
       return;
     }
     if (!state.job || !state.environment) return; // No idle or playback inference.
+    try {
+      await assertProjectBudget(this.env);
+    } catch (error) {
+      if (!isBudgetError(error)) throw error;
+      const latest = this.load();
+      if (latest.job) this.failSegment(latest, error.message);
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    // The budget RPC can interleave with a reset/regeneration or compilation.
+    state = this.load();
+    if (!state.job || !state.environment) return;
     const segment = state.segments.find((s) => s.id === state.job!.segmentId)!;
     if (segment.status === "interpreting") {
       this.failSegment(
@@ -350,6 +384,15 @@ export class SimulationSession extends DurableObject<Bindings> {
         latest.run?.runId !== working.runId
       )
         return;
+      const budgetFailure = results.find(
+        (result) =>
+          result.status === "rejected" && isBudgetError(result.reason),
+      );
+      if (budgetFailure?.status === "rejected") {
+        this.failSegment(latest, budgetFailure.reason.message);
+        await this.ctx.storage.deleteAlarm();
+        return;
+      }
       results.forEach((result, i) =>
         applyDecision(
           latest.environment!,
@@ -426,6 +469,9 @@ export default {
           decisions: "Cloudflare Workers AI / typesafe/jev",
           configured: !!env.BASETEN_API_KEY || !!env.ANTHROPIC_API_KEY,
         });
+      if (url.pathname === "/api/budget" && request.method === "GET")
+        return json(await getProjectBudget(env));
+      if (request.method === "POST") await assertProjectBudget(env);
       let session = request.headers
         .get("Cookie")
         ?.match(/(?:^|;\s*)cc_session=([a-f0-9]{64})(?:;|$)/)?.[1];
@@ -481,6 +527,7 @@ export default {
         );
       return response;
     } catch (error) {
+      if (isBudgetError(error)) return budgetErrorResponse(error);
       if (error instanceof z.ZodError)
         return json(
           {

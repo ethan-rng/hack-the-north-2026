@@ -1,3 +1,4 @@
+import { mockBudgetBinding } from "./helpers/budget";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { interpretEvent, WORKERS_AI_FALLBACK_MODEL } from "../cloudflare/ai";
 import { newRun } from "../src/core/engine";
@@ -69,6 +70,7 @@ describe("structured AI failover", () => {
 
     await interpretEvent(
       {
+        AI_BUDGET: mockBudgetBinding(),
         BASETEN_API_KEY: "configured",
         BASETEN_MODEL: "openai/gpt-oss-120b",
         AI_GATEWAY_ID: "crowd-control",
@@ -98,6 +100,7 @@ describe("structured AI failover", () => {
 
     await interpretEvent(
       {
+        AI_BUDGET: mockBudgetBinding(),
         BASETEN_API_KEY: "configured",
         BASETEN_MODEL: "openai/gpt-oss-120b",
         AI_GATEWAY_ID: "crowd-control",

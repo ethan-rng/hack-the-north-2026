@@ -7,7 +7,16 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AI_BUDGET",
+        "class_name": "ProjectAiBudget",
+        "script_name": "crowd-control-julian",
+      },
+    ],
+  },
   "ai": { "binding": "AI", "remote": true },
   "vars": { "AI_GATEWAY_ID": "crowd-control" },
-  "observability": { "enabled": true, "head_sampling_rate": 1 }
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
 }

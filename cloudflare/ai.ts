@@ -1,3 +1,9 @@
+import {
+  assertProjectBudget,
+  isBudgetError,
+  withCloudflareBudget,
+  type BudgetEnv,
+} from "../shared/ai-budget";
 import { z } from "zod";
 import {
   compileEnvironment,
@@ -19,7 +25,7 @@ import type {
 } from "../src/core/types";
 import { normalizeJevResponse } from "../services/jev-worker/src/jev-response";
 
-export interface AIEnv {
+export interface AIEnv extends BudgetEnv {
   BASETEN_API_KEY: string;
   BASETEN_MODEL: string;
   ANTHROPIC_API_KEY?: string;
@@ -47,6 +53,7 @@ async function baseten(
   timeout: number,
   search = false,
 ): Promise<Completion> {
+  await assertProjectBudget(env);
   if (!env.BASETEN_API_KEY)
     throw new Error("Baseten inference key is not configured");
   const response = await fetch(
@@ -75,25 +82,37 @@ async function workersAi(
   body: Record<string, unknown>,
   timeout: number,
 ): Promise<Completion> {
-  const response = await env.AI.run(
+  const response = await withCloudflareBudget(
+    env,
     WORKERS_AI_FALLBACK_MODEL,
-    {
-      messages: body.messages as {
-        role: "system" | "user";
-        content: string;
-      }[],
-      max_tokens: body.max_tokens as number,
-      response_format: body.response_format as {
-        type: "json_schema";
-        json_schema: {
-          name: string;
-          strict: boolean;
-          schema: Record<string, unknown>;
-        };
-      },
-      temperature: 0,
-    },
-    { signal: AbortSignal.timeout(timeout) },
+    () =>
+      env.AI.run(
+        WORKERS_AI_FALLBACK_MODEL,
+        {
+          messages: body.messages as {
+            role: "system" | "user";
+            content: string;
+          }[],
+          max_tokens: body.max_tokens as number,
+          response_format: body.response_format as {
+            type: "json_schema";
+            json_schema: {
+              name: string;
+              strict: boolean;
+              schema: Record<string, unknown>;
+            };
+          },
+          temperature: 0,
+        },
+        {
+          signal: AbortSignal.timeout(timeout),
+          gateway: {
+            id: env.AI_GATEWAY_ID,
+            skipCache: true,
+            retries: { maxAttempts: 1 },
+          },
+        },
+      ),
   );
   return response as Completion;
 }
@@ -132,6 +151,7 @@ async function structured<T extends z.ZodType>(
       provider: "baseten",
     };
   } catch (basetenError) {
+    if (isBudgetError(basetenError)) throw basetenError;
     try {
       const data = await workersAi(env, body, timeout - basetenTimeout);
       return {
@@ -141,6 +161,7 @@ async function structured<T extends z.ZodType>(
         provider: "workers-ai",
       };
     } catch (workersAiError) {
+      if (isBudgetError(workersAiError)) throw workersAiError;
       throw new AggregateError(
         [basetenError, workersAiError],
         "Baseten and Workers AI could not produce a valid structured response",
@@ -199,7 +220,9 @@ function validSourceUrl(value: unknown): string | undefined {
   if (typeof value !== "string") return;
   try {
     const url = new URL(value);
-    return ["https:", "http:"].includes(url.protocol) ? url.toString() : undefined;
+    return ["https:", "http:"].includes(url.protocol)
+      ? url.toString()
+      : undefined;
   } catch {
     return;
   }
@@ -210,25 +233,36 @@ function validSourceUrl(value: unknown): string | undefined {
  */
 export function extractClaudeSources(data: ClaudeResearchCompletion): Source[] {
   const collected = new Map<string, Omit<Source, "id" | "retrievedAt">>();
-  const add = (urlValue: unknown, titleValue: unknown, excerptValue: unknown) => {
+  const add = (
+    urlValue: unknown,
+    titleValue: unknown,
+    excerptValue: unknown,
+  ) => {
     const url = validSourceUrl(urlValue);
     if (!url) return;
     const existing = collected.get(url);
     const title =
       typeof titleValue === "string" && titleValue.trim()
         ? titleValue.slice(0, 200)
-        : existing?.title ?? new URL(url).hostname;
+        : (existing?.title ?? new URL(url).hostname);
     const excerpt =
       typeof excerptValue === "string" && excerptValue.trim()
         ? excerptValue.slice(0, 1800)
-        : existing?.excerpt ?? "Retrieved through Claude web search.";
+        : (existing?.excerpt ?? "Retrieved through Claude web search.");
     collected.set(url, { url, title, excerpt });
   };
   for (const block of data.content ?? []) {
-    if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
+    if (
+      block.type === "web_search_tool_result" &&
+      Array.isArray(block.content)
+    ) {
       for (const result of block.content) {
         if (!result || typeof result !== "object") continue;
-        const item = result as { type?: unknown; url?: unknown; title?: unknown };
+        const item = result as {
+          type?: unknown;
+          url?: unknown;
+          title?: unknown;
+        };
         if (item.type === "web_search_result")
           add(item.url, item.title, undefined);
       }
@@ -250,6 +284,7 @@ async function claudeResearch(
   topicInstructions: string,
   identitySources: Source[],
 ): Promise<Source[]> {
+  await assertProjectBudget(env);
   if (!env.ANTHROPIC_API_KEY)
     throw new Error("Anthropic research key is not configured");
   const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -291,6 +326,7 @@ export async function researchEnvironment(
   setupId: string,
   stage: (message: string) => void,
 ): Promise<Environment> {
+  await assertProjectBudget(env);
   const demoKind = demoKindForDescription(description);
   if (demoKind) {
     stage(
@@ -353,9 +389,11 @@ export async function researchEnvironment(
         true,
       );
       const basetenSources = extractSources(result).slice(0, 4);
-      if (basetenSources.length) return basetenSources.map((source) => ({ ...source, topic }));
+      if (basetenSources.length)
+        return basetenSources.map((source) => ({ ...source, topic }));
       throw new Error("Baseten research returned no usable sources");
     } catch (basetenError) {
+      if (isBudgetError(basetenError)) throw basetenError;
       try {
         const claudeSources = await claudeResearch(
           env,
@@ -370,6 +408,7 @@ export async function researchEnvironment(
           .slice(0, 4)
           .map((source) => ({ ...source, topic }));
       } catch (claudeError) {
+        if (isBudgetError(claudeError)) throw claudeError;
         throw new AggregateError(
           [basetenError, claudeError],
           "Baseten and Claude research could not retrieve usable sources",
@@ -392,7 +431,8 @@ export async function researchEnvironment(
   stage("Resolving venue identity and official sources…");
   try {
     collect(await searchTopic("identity"));
-  } catch {
+  } catch (error) {
+    if (isBudgetError(error)) throw error;
     notes.push(
       "Identity research was unavailable; the venue identity is not independently established.",
     );
@@ -405,6 +445,8 @@ export async function researchEnvironment(
   );
   let completed = identitySources.length ? 1 : 0;
   results.forEach((result, index) => {
+    if (result.status === "rejected" && isBudgetError(result.reason))
+      throw result.reason;
     if (result.status === "fulfilled" && result.value.length) {
       completed++;
       collect(result.value);
@@ -448,7 +490,8 @@ export async function researchEnvironment(
         35000,
       )
     ).value;
-  } catch {
+  } catch (error) {
+    if (isBudgetError(error)) throw error;
     generated = fallbackConfiguration(description);
     if (researchStatus === "succeeded") researchStatus = "partial";
     notes.push(
@@ -471,6 +514,7 @@ export async function interpretEvent(
   run: Run,
   event: Event,
 ) {
+  await assertProjectBudget(env);
   if (applyCuratedDemoEvent(environment, run, event)) return;
   const structuredResult = await structured(
     env,
@@ -531,25 +575,31 @@ export async function decide(
   ticket: DecisionTicket,
 ): Promise<string | undefined> {
   const result = normalizeJevResponse(
-    await env.AI.run(
-      "typesafe/jev",
-      {
-        state: ticket.context,
-        questions: {
-          action: {
-            type: "choice",
-            instructions:
-              "Choose this individual's next action from valid choices. Fulfill unfinished personal goals using the provided targets and capabilities: move to a place before joining its service or purchasing there. If hungry, buy food then eat. A pending goal with sourceEventId is a temporary response to the current event and takes priority while it remains active. When feasible, choose its direct response, movement or purchase action instead of an unrelated ordinary goal; preserve the person’s baseline goals for after it expires. Respect budget, interests, patience, known events, and planned departure; leave when goals are completed or departure is near. Keep productive queues/services unless a reason to leave arises. Do not browse repeatedly without progress. Perceived threats may justify fleeing, but choices depend on this person's traits. All submitted events are globally known, including to people outside; individual reactions still depend on goals and traits. If presence is exited, choose between staying outside and reentering. Reenter only for a meaningful reason such as a relevant new event or unfinished goal, considering threats and departure plans; do not repeatedly leave and return without a reason. Reentering preserves completed goals, purchases, and remaining budget.",
-            criteria: Object.fromEntries(
-              ticket.choices.map((c) => [c.id, c.label]),
-            ),
+    await withCloudflareBudget(env, "typesafe/jev", () =>
+      env.AI.run(
+        "typesafe/jev",
+        {
+          state: ticket.context,
+          questions: {
+            action: {
+              type: "choice",
+              instructions:
+                "Choose this individual's next action from valid choices. Fulfill unfinished personal goals using the provided targets and capabilities: move to a place before joining its service or purchasing there. If hungry, buy food then eat. A pending goal with sourceEventId is a temporary response to the current event and takes priority while it remains active. When feasible, choose its direct response, movement or purchase action instead of an unrelated ordinary goal; preserve the person’s baseline goals for after it expires. Respect budget, interests, patience, known events, and planned departure; leave when goals are completed or departure is near. Keep productive queues/services unless a reason to leave arises. Do not browse repeatedly without progress. Perceived threats may justify fleeing, but choices depend on this person's traits. All submitted events are globally known, including to people outside; individual reactions still depend on goals and traits. If presence is exited, choose between staying outside and reentering. Reenter only for a meaningful reason such as a relevant new event or unfinished goal, considering threats and departure plans; do not repeatedly leave and return without a reason. Reentering preserves completed goals, purchases, and remaining budget.",
+              criteria: Object.fromEntries(
+                ticket.choices.map((c) => [c.id, c.label]),
+              ),
+            },
           },
         },
-      },
-      {
-        gateway: { id: env.AI_GATEWAY_ID, skipCache: true },
-        signal: AbortSignal.timeout(18000),
-      },
+        {
+          gateway: {
+            id: env.AI_GATEWAY_ID,
+            skipCache: true,
+            retries: { maxAttempts: 1 },
+          },
+          signal: AbortSignal.timeout(18000),
+        },
+      ),
     ),
   );
   const answer = (result.answers as Record<string, unknown>).action;
