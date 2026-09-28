@@ -74,13 +74,15 @@ Request bodies are limited to 64 KiB. Question/option IDs are at most 128 charac
 | --- | --- |
 | 400 | Invalid JSON or input schema |
 | 401 | Missing or incorrect endpoint key |
+| 402 | The allocated budget for this project has been reached |
+| 429 | Remaining budget temporarily reserved by in-flight requests |
 | 404 / 405 | Unknown route / wrong method |
 | 413 / 415 | Body too large / wrong content type |
 | 502 | Upstream inference failed or returned no structured answers |
 | 503 | Worker endpoint key missing |
 | 504 | Inference timeout |
 
-Preserve the current behavior on failed inference. Use bounded concurrency (start with four in-flight person decisions) and at most one delayed retry for transient failures; do not keep retrying account setup errors. Do not run inference on animation frames. The endpoint disables gateway response caching (`skipCache: true`) and performs no automatic retries. Account/provider quotas still apply; this endpoint does not impose a global spending cap.
+Preserve the current behavior on failed inference. Use bounded concurrency (start with four in-flight person decisions) and at most one delayed retry for transient failures; do not keep retrying account setup errors. Do not run inference on animation frames. The endpoint disables gateway response caching (`skipCache: true`) and performs no automatic retries. Account/provider quotas still apply. This endpoint shares the app’s persistent $5 Cloudflare AI budget. It returns HTTP 402 with `project_budget_exhausted` and the project-budget message after exhaustion; a temporary 429 means the remaining allowance is reserved by in-flight requests. See the README for accounting and deployment details.
 
 ## PRD integration responsibilities
 

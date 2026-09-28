@@ -1,9 +1,16 @@
+import {
+  withCloudflareBudget,
+  isBudgetError,
+  budgetErrorResponse,
+  type BudgetEnv,
+} from "../../shared/ai-budget";
 // Cloudflare Worker: rate-limited proxy in front of Workers AI's typesafe/jev
 // model. Next.js POSTs { state, questions[] }; the worker translates to Jev's
 // { state, questions: { <id>: {...} } } shape, calls env.AI.run(), and returns
 // { answers: [{ agentId, probabilities }] } so the sim can sample as usual.
 
-export interface Env {
+export interface Env extends BudgetEnv {
+  AI_GATEWAY_ID: string;
   AI: Ai;
   JEV_RATE_PER_SEC: string;
   JEV_BURST: string;
@@ -32,7 +39,10 @@ interface ProxyResponse {
 
 // Token bucket per isolate. Cloudflare may spin up several isolates under
 // load; for a hackathon demo (single client) this is close enough.
-const bucket: { tokens: number; last: number } = { tokens: 30, last: Date.now() };
+const bucket: { tokens: number; last: number } = {
+  tokens: 30,
+  last: Date.now(),
+};
 
 async function acquire(rate: number, cap: number): Promise<void> {
   const now = Date.now();
@@ -61,10 +71,13 @@ function corsHeaders(env: Env): HeadersInit {
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
-    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(env) });
+    if (req.method === "OPTIONS")
+      return new Response(null, { status: 204, headers: corsHeaders(env) });
     const url = new URL(req.url);
-    if (url.pathname === "/health") return new Response("ok", { status: 200, headers: corsHeaders(env) });
-    if (url.pathname !== "/jev" || req.method !== "POST") return json({ error: "not found" }, 404, env);
+    if (url.pathname === "/health")
+      return new Response("ok", { status: 200, headers: corsHeaders(env) });
+    if (url.pathname !== "/jev" || req.method !== "POST")
+      return json({ error: "not found" }, 404, env);
 
     let body: ProxyRequest;
     try {
@@ -72,7 +85,8 @@ export default {
     } catch {
       return json({ error: "invalid json" }, 400, env);
     }
-    if (!body?.questions?.length) return json({ error: "questions[] required" }, 400, env);
+    if (!body?.questions?.length)
+      return json({ error: "questions[] required" }, 400, env);
 
     const rate = Number(env.JEV_RATE_PER_SEC ?? "18");
     const burst = Number(env.JEV_BURST ?? "30");
@@ -85,15 +99,29 @@ export default {
     while (true) {
       await acquire(rate, burst);
       try {
-        const raw = await env.AI.run("typesafe/jev" as never, {
-          state: body.state,
-          questions: jevQuestions,
-        } as never);
+        const raw = await withCloudflareBudget(env, "typesafe/jev", () =>
+          env.AI.run(
+            "typesafe/jev" as never,
+            {
+              state: body.state,
+              questions: jevQuestions,
+            } as never,
+            {
+              gateway: {
+                id: env.AI_GATEWAY_ID,
+                skipCache: true,
+                retries: { maxAttempts: 1 },
+              },
+            },
+          ),
+        );
         const answers = fromJevAnswers(body.questions, raw);
         return json({ answers } satisfies ProxyResponse, 200, env);
       } catch (err) {
+        if (isBudgetError(err)) return budgetErrorResponse(err);
         const msg = err instanceof Error ? err.message : String(err);
-        if (attempt >= maxRetries) return json({ error: `workers-ai failed: ${msg}` }, 502, env);
+        if (attempt >= maxRetries)
+          return json({ error: `workers-ai failed: ${msg}` }, 502, env);
         await sleep(backoffMs);
         backoffMs = Math.min(4000, backoffMs * 2);
         attempt += 1;
@@ -169,16 +197,21 @@ type JevResult = NoulResult | ChoiceResult | ScoreResult;
 
 // Convert Jev's per-type response into our uniform { probabilities } shape.
 function fromJevAnswers(qs: JevQuestion[], raw: unknown): JevAnswer[] {
-  const answers = (raw as { answers?: Record<string, JevResult> })?.answers ?? {};
+  const answers =
+    (raw as { answers?: Record<string, JevResult> })?.answers ?? {};
   return qs.map((q) => {
     const r = answers[q.agentId];
     return { agentId: q.agentId, probabilities: probsFor(q, r) };
   });
 }
 
-function probsFor(q: JevQuestion, r: JevResult | undefined): Record<string, number> {
+function probsFor(
+  q: JevQuestion,
+  r: JevResult | undefined,
+): Record<string, number> {
   if (!r) return uniformFor(q);
-  if (r.type === "noul") return { yes: clamp01(r.noul), no: clamp01(1 - r.noul) };
+  if (r.type === "noul")
+    return { yes: clamp01(r.noul), no: clamp01(1 - r.noul) };
   if (r.type === "score" || r.type === "choice") {
     const out: Record<string, number> = {};
     let total = 0;
@@ -195,7 +228,12 @@ function probsFor(q: JevQuestion, r: JevResult | undefined): Record<string, numb
 }
 
 function uniformFor(q: JevQuestion): Record<string, number> {
-  const opts = q.type === "noul" ? ["yes", "no"] : q.type === "score" ? ["1", "2", "3", "4", "5"] : q.options ?? [];
+  const opts =
+    q.type === "noul"
+      ? ["yes", "no"]
+      : q.type === "score"
+        ? ["1", "2", "3", "4", "5"]
+        : (q.options ?? []);
   if (opts.length === 0) return {};
   const p = 1 / opts.length;
   const out: Record<string, number> = {};

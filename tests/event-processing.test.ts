@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { decide, interpretEvent, type AIEnv } from "../cloudflare/ai";
+import { mockBudgetBinding } from "./helpers/budget";
 import { buildDemoEnvironment } from "../src/core/demoEnvironments";
 import {
   activateEvent,
@@ -57,6 +58,7 @@ function mockInterpreter(effects: Effect[], title = "Interpreted user event") {
     BASETEN_MODEL: "test-model",
     AI_GATEWAY_ID: "test-gateway",
     AI: { run: jev } as unknown as Ai,
+    AI_BUDGET: mockBudgetBinding(),
   };
   return { fetch, jev, bindings, result };
 }

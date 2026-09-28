@@ -12,9 +12,15 @@
   },
   "ai": { "binding": "AI", "remote": true },
   "durable_objects": {
-    "bindings": [{ "name": "SESSIONS", "class_name": "SimulationSession" }],
+    "bindings": [
+      { "name": "SESSIONS", "class_name": "SimulationSession" },
+      { "name": "AI_BUDGET", "class_name": "ProjectAiBudget" },
+    ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SimulationSession"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SimulationSession"] },
+    { "tag": "v2-ai-budget", "new_sqlite_classes": ["ProjectAiBudget"] },
+  ],
   "vars": {
     "BASETEN_MODEL": "openai/gpt-oss-120b",
     "ANTHROPIC_RESEARCH_MODEL": "claude-sonnet-4-6",
