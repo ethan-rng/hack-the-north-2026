@@ -175,7 +175,9 @@ try {
   );
   await page.getByRole("button", { name: "People", exact: true }).click();
   await page.locator(".entity-scroll button").first().click();
-  await page.getByRole("heading", { name: "Alex", exact: true }).waitFor();
+  await page
+    .getByRole("heading", { name: "Alex Rivera", exact: true })
+    .waitFor();
   await page.screenshot({ path: "/private/tmp/crowd-playback-history.png" });
   await slider.focus();
   await slider.press("End");

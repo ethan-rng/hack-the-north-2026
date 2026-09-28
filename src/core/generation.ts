@@ -159,7 +159,7 @@ function random(seed: number) {
     return ((n ^ (n >>> 14)) >>> 0) / 4294967296;
   };
 }
-const names = [
+const givenNames = [
   "Alex",
   "Sam",
   "Jordan",
@@ -200,6 +200,15 @@ const names = [
   "Dakota",
   "Indigo",
   "Micah",
+];
+const familyNames = [
+  "Rivera",
+  "Chen",
+  "Patel",
+  "Williams",
+  "Okafor",
+  "Nguyen",
+  "Morales",
 ];
 const colors = [
   "#fcbf74",
@@ -565,9 +574,9 @@ export function compileEnvironment(
     Math.max(30, data.populationSize ?? 150),
   );
   const roster = Array.from({ length: desiredPopulation }, (_, i) => {
-    const base = names[i % names.length];
-    const cycle = Math.floor(i / names.length);
-    return cycle === 0 ? base : `${base} ${cycle + 1}`;
+    const givenName = givenNames[i % givenNames.length];
+    const familyName = familyNames[Math.floor(i / givenNames.length)];
+    return `${givenName} ${familyName}`;
   });
   env.population = roster.map((name, i) => {
     const taskCount = 2 + Math.floor(goalRng() * 4);
