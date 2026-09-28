@@ -320,6 +320,8 @@ label {
   animation: progress 2.5s ease-in-out infinite;
 }
 .workspace {
+  --inspector-width: 330px;
+  position: relative;
   height: 100dvh;
   min-height: 680px;
   overflow: hidden;
@@ -327,7 +329,7 @@ label {
 .world-pane {
   position: absolute;
   left: 0;
-  right: 330px;
+  right: var(--inspector-width);
   top: 0;
   bottom: 0;
 }
@@ -967,12 +969,48 @@ label {
   right: 0;
   top: 0;
   bottom: 0;
-  width: 330px;
+  width: var(--inspector-width);
   background: var(--paper);
   border-left: 1px solid var(--line);
   z-index: 30;
   display: flex;
   flex-direction: column;
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease,
+    visibility 0s linear;
+}
+.inspector.closed {
+  transform: translateX(calc(100% + 1px));
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease,
+    visibility 0s linear 250ms;
+}
+.inspector-toggle {
+  position: absolute;
+  top: 9px;
+  right: 12px;
+  z-index: 32;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d6ddce;
+  border-radius: 7px;
+  color: var(--ink);
+  background: #fbfaf5;
+  box-shadow: 0 4px 16px #30413012;
+  transition: background-color 150ms ease;
+}
+.inspector-toggle:hover {
+  background: #e9ede1;
 }
 .inspector-tabs {
   height: 53px;
@@ -980,7 +1018,7 @@ label {
   flex-shrink: 0;
   align-items: stretch;
   border-bottom: 1px solid var(--line);
-  padding: 0 22px;
+  padding: 0 58px 0 22px;
   gap: 25px;
 }
 .inspector-tabs button {
@@ -1557,13 +1595,16 @@ label {
     right: 360px;
   }
   .inspector {
-    width: 360px;
+    width: var(--inspector-width);
   }
   .event-composer {
     right: 384px;
   }
 }
 @media (max-width: 1180px) {
+  .workspace {
+    --inspector-width: 300px;
+  }
   .entity-list {
     width: 155px;
     left: 12px;
@@ -1578,7 +1619,7 @@ label {
     right: 300px;
   }
   .inspector {
-    width: 300px;
+    width: var(--inspector-width);
   }
   .world-top {
     left: 185px;
@@ -1717,6 +1758,35 @@ label {
     border-radius: 8px;
     max-height: 600px;
     min-height: 330px;
+    overflow: hidden;
+    transition:
+      max-height 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      min-height 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms ease,
+      visibility 0s linear;
+  }
+  .inspector.closed {
+    max-height: 0;
+    min-height: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    border-width: 0;
+    transform: translateY(-10px);
+    transition:
+      max-height 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      min-height 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms ease,
+      visibility 0s linear 250ms;
+  }
+  .inspector-toggle {
+    position: relative;
+    top: auto;
+    right: auto;
+    margin: 12px 15px 0 auto;
   }
   .inspector-content {
     padding: 22px;
@@ -1783,6 +1853,8 @@ label {
   }
   .entity-list,
   .entity-list-toggle,
+  .inspector,
+  .inspector-toggle,
   .workspace .world-pane:not(.summary-world),
   .workspace .event-composer {
     transition-duration: 0.01ms;
@@ -2115,7 +2187,7 @@ label {
   }
   .workspace .event-composer {
     left: 220px;
-    right: 330px;
+    right: var(--inspector-width);
     bottom: 0;
     border-radius: 0;
     border-width: 1px 0 0;
@@ -2128,6 +2200,34 @@ label {
   }
   .workspace.sidebar-collapsed .event-composer {
     left: 0;
+  }
+}
+
+/* Let the scene and event composer use the inspector's space while it is closed. */
+.workspace .world-pane:not(.summary-world) {
+  transition:
+    left 250ms cubic-bezier(0.22, 1, 0.36, 1),
+    right 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.workspace.inspector-collapsed .world-pane:not(.summary-world),
+.workspace.inspector-collapsed .event-composer {
+  right: 0;
+}
+.workspace .event-composer {
+  transition:
+    left 250ms cubic-bezier(0.22, 1, 0.36, 1),
+    right 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (min-width: 1600px) {
+  .workspace {
+    --inspector-width: 360px;
+  }
+}
+@media (max-width: 850px) {
+  .workspace .world-pane:not(.summary-world),
+  .workspace.inspector-collapsed .world-pane:not(.summary-world),
+  .workspace.inspector-collapsed .event-composer {
+    right: auto;
   }
 }
 @media (min-width: 1600px) {

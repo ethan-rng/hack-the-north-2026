@@ -25,6 +25,8 @@ import {
   MapPin,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   RotateCcw,
   Sparkles,
   Users,
@@ -892,6 +894,7 @@ export default function Page() {
   const [editing, setEditing] = useState(false);
   const [list, setList] = useState<"places" | "people">("places");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
   const [heatMode, setHeatMode] = useState<HeatMode>("off");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState<null | "places" | "people">(null);
@@ -1253,7 +1256,7 @@ export default function Page() {
       className={
         setupView
           ? "app onboarding"
-          : `app workspace ${sidebarOpen ? "sidebar-open" : "sidebar-collapsed"}`
+          : `app workspace ${sidebarOpen ? "sidebar-open" : "sidebar-collapsed"}${inspectorOpen ? "" : " inspector-collapsed"}`
       }
     >
       {error && (
@@ -1669,7 +1672,30 @@ export default function Page() {
                   Describe another place <ArrowUpRight size={13} />
                 </button>
               </nav>
-              <aside className="inspector">
+              <button
+                type="button"
+                className="inspector-toggle"
+                aria-controls="world-inspector"
+                aria-expanded={inspectorOpen}
+                aria-label={
+                  inspectorOpen ? "Collapse inspector" : "Expand inspector"
+                }
+                title={inspectorOpen ? "Collapse inspector" : "Expand inspector"}
+                onClick={() => setInspectorOpen((open) => !open)}
+              >
+                {inspectorOpen ? (
+                  <PanelRightClose size={17} />
+                ) : (
+                  <PanelRightOpen size={17} />
+                )}
+              </button>
+              <aside
+                id="world-inspector"
+                className={`inspector ${inspectorOpen ? "open" : "closed"}`}
+                aria-label="World inspector"
+                aria-hidden={!inspectorOpen}
+                inert={!inspectorOpen}
+              >
                 <div className="inspector-tabs">
                   <button
                     className={panel === "entity" ? "active" : ""}
